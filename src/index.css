@@ -1,0 +1,8 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+.card { @apply rounded-2xl border border-gray-200 bg-white shadow-sm; }
+.tab { @apply px-4 py-2 rounded-full border; }
+.tab-active { @apply bg-black text-white border-black; }
+.tab-inactive { @apply bg-white text-black; }
