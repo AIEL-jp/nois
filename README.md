@@ -7,6 +7,7 @@
 ```bash
 npm install
 npm run dev
+```
 
 ブラウザで http://localhost:5173 を開きます。
 
