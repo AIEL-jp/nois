@@ -34,6 +34,7 @@ export default function App() {
   const [copiedLocal, setCopiedLocal] = useState(false);
   const [connState, setConnState] = useState<RTCPeerConnectionState | "new">("new");
   const [iceState, setIceState] = useState<RTCIceConnectionState | "new">("new");
+  const [isInCall, setIsInCall] = useState(false);
 
   // Translation / TTS
   const [fromLang, setFromLang] = useState<Lang>("auto");
@@ -50,9 +51,29 @@ export default function App() {
     p.ontrack = (ev) => {
       const [stream] = ev.streams;
       if (remoteAudioRef.current) remoteAudioRef.current.srcObject = stream;
+      setIsInCall(true);
+      showToast("相手の音声を受信しました");
     };
-    p.onconnectionstatechange = () => setConnState(p.connectionState);
-    p.oniceconnectionstatechange = () => setIceState(p.iceConnectionState);
+    p.onconnectionstatechange = () => {
+      const newState = p.connectionState;
+      setConnState(newState);
+      if (newState === "connected") {
+        setIsInCall(true);
+        showToast("音声通話が接続されました");
+      } else if (newState === "disconnected" || newState === "failed" || newState === "closed") {
+        setIsInCall(false);
+        showToast("音声通話が切断されました");
+      }
+    };
+    p.oniceconnectionstatechange = () => {
+      const newState = p.iceConnectionState;
+      setIceState(newState);
+      if (newState === "connected") {
+        showToast("ICE接続が確立されました");
+      } else if (newState === "failed" || newState === "disconnected") {
+        showToast("ICE接続に問題が発生しました");
+      }
+    };
     p.ondatachannel = (ev) => wireDataChannel(ev.channel);
     return () => { p.close(); };
   }, []);
@@ -101,22 +122,132 @@ export default function App() {
   // Media
   async function startMic() {
     if (!pc) return;
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    localStreamRef.current = stream;
-    for (const s of pc.getSenders()) if (s.track && s.track.kind === "audio") pc.removeTrack(s);
-    stream.getTracks().forEach(t => pc.addTrack(t, stream));
-    setMicEnabled(true); setMicMuted(false);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true
+        } 
+      });
+      localStreamRef.current = stream;
+      
+      // 既存のオーディオトラックを削除
+      for (const sender of pc.getSenders()) {
+        if (sender.track && sender.track.kind === "audio") {
+          pc.removeTrack(sender);
+        }
+      }
+      
+      // 新しいオーディオトラックを追加
+      stream.getAudioTracks().forEach(track => {
+        pc.addTrack(track, stream);
+      });
+      
+      setMicEnabled(true); 
+      setMicMuted(false);
+      showToast("マイクが開始されました");
+      
+      // 音声トラックを追加した後、接続が確立されている場合は再ネゴシエーションが必要
+      if (pc.connectionState === "connected" || pc.connectionState === "connecting") {
+        showToast("音声トラックが追加されました。必要に応じてSDPを再交換してください。");
+      }
+    } catch (error) {
+      console.error("マイクの開始に失敗しました:", error);
+      showToast("マイクの開始に失敗しました");
+    }
   }
+  
   function stopMic() {
-    localStreamRef.current?.getTracks().forEach(t => t.stop());
-    setMicEnabled(false); setMicMuted(false);
+    if (localStreamRef.current) {
+      localStreamRef.current.getTracks().forEach(track => track.stop());
+      localStreamRef.current = null;
+    }
+    
+    // オーディオトラックを削除
+    for (const sender of pc.getSenders()) {
+      if (sender.track && sender.track.kind === "audio") {
+        pc.removeTrack(sender);
+      }
+    }
+    
+    setMicEnabled(false); 
+    setMicMuted(false);
+    showToast("マイクが停止されました");
   }
+
+  function endCall() {
+    if (pc) {
+      pc.close();
+      setPc(null);
+    }
+    if (localStreamRef.current) {
+      localStreamRef.current.getTracks().forEach(track => track.stop());
+      localStreamRef.current = null;
+    }
+    setMicEnabled(false);
+    setMicMuted(false);
+    setIsInCall(false);
+    setConnState("new");
+    setIceState("new");
+    setDcState("closed");
+    setDataChannel(null);
+    showToast("通話が終了されました");
+  }
+
+  function createNewConnection() {
+    endCall();
+    const p = new RTCPeerConnection({ iceServers });
+    setPc(p);
+    p.ontrack = (ev) => {
+      const [stream] = ev.streams;
+      if (remoteAudioRef.current) remoteAudioRef.current.srcObject = stream;
+      setIsInCall(true);
+      showToast("相手の音声を受信しました");
+    };
+    p.onconnectionstatechange = () => {
+      const newState = p.connectionState;
+      setConnState(newState);
+      if (newState === "connected") {
+        setIsInCall(true);
+        showToast("音声通話が接続されました");
+      } else if (newState === "disconnected" || newState === "failed" || newState === "closed") {
+        setIsInCall(false);
+        showToast("音声通話が切断されました");
+      }
+    };
+    p.oniceconnectionstatechange = () => {
+      const newState = p.iceConnectionState;
+      setIceState(newState);
+      if (newState === "connected") {
+        showToast("ICE接続が確立されました");
+      } else if (newState === "failed" || newState === "disconnected") {
+        showToast("ICE接続に問題が発生しました");
+      }
+    };
+    p.ondatachannel = (ev) => wireDataChannel(ev.channel);
+    
+    // 既存のローカルストリームがある場合は、新しい接続にも追加
+    if (localStreamRef.current) {
+      localStreamRef.current.getAudioTracks().forEach(track => {
+        p.addTrack(track, localStreamRef.current!);
+      });
+      showToast("既存の音声トラックが新しい接続に追加されました");
+    }
+    
+    showToast("新しい接続が作成されました");
+  }
+  
   function toggleMute() {
-    const s = localStreamRef.current;
-    if (!s) return;
+    const stream = localStreamRef.current;
+    if (!stream) return;
+    
     const to = !micMuted;
-    s.getAudioTracks().forEach(t => t.enabled = !to);
+    stream.getAudioTracks().forEach(track => {
+      track.enabled = !to;
+    });
     setMicMuted(to);
+    showToast(to ? "マイクがミュートされました" : "マイクのミュートが解除されました");
   }
 
   // Manual signaling
@@ -124,26 +255,48 @@ export default function App() {
     if (!pc) return;
     setCreatingOffer(true);
     try {
+      // 音声トラックが追加されているか確認
+      if (!localStreamRef.current) {
+        showToast("先にマイクを開始してください");
+        return;
+      }
+      
       const ch = pc.createDataChannel("captions");
       wireDataChannel(ch);
+      
+      // 音声トラックが確実に含まれるようにする
+      const audioTracks = localStreamRef.current.getAudioTracks();
+      if (audioTracks.length === 0) {
+        showToast("音声トラックが見つかりません");
+        return;
+      }
+      
       const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
       await waitForICEGathering(pc);
       localSDPRef.current!.value = JSON.stringify(pc.localDescription);
-      showToast("Offer created");
+      showToast("Offer created - 音声トラックが含まれています");
     } finally { setCreatingOffer(false); }
   }
+  
   async function acceptOfferAndCreateAnswer() {
     if (!pc || !remoteSDPRef.current) return;
     setAnswering(true);
     try {
       const offer = JSON.parse(remoteSDPRef.current.value);
       await pc.setRemoteDescription(offer);
+      
+      // 音声トラックが追加されているか確認
+      if (!localStreamRef.current) {
+        showToast("先にマイクを開始してください");
+        return;
+      }
+      
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
       await waitForICEGathering(pc);
       localSDPRef.current!.value = JSON.stringify(pc.localDescription);
-      showToast("Answer created");
+      showToast("Answer created - 音声トラックが含まれています");
     } finally { setAnswering(false); }
   }
   async function setRemoteDescriptionManual() {
@@ -218,9 +371,27 @@ export default function App() {
                   <button onClick={toggleMute} disabled={!micEnabled} className={"px-3 py-2 text-white text-sm font-medium border " + (!micEnabled ? "bg-gray-400 border-gray-400 cursor-not-allowed" : (micMuted ? "bg-amber-600 border-amber-600" : "bg-amber-500 border-amber-500"))}>
                     {micMuted ? "Unmute" : "Mute"}
                   </button>
+                  {isInCall && (
+                    <button onClick={endCall} className="px-3 py-2 text-white text-sm font-medium border bg-red-700 border-red-700">
+                      通話終了
+                    </button>
+                  )}
+                  <button onClick={createNewConnection} className="px-3 py-2 text-white text-sm font-medium border bg-gray-600 border-gray-600">
+                    新規接続
+                  </button>
                   <div className="text-sm text-gray-600 bg-gray-50 px-2 py-1 border border-gray-300">
                     PC: {connState} / ICE: {iceState} / DC: {dcState}
                   </div>
+                  {localStreamRef.current && (
+                    <div className="text-sm text-blue-600 bg-blue-50 px-2 py-1 border border-blue-300">
+                      🎤 ローカル音声: {localStreamRef.current.getAudioTracks().length}トラック
+                    </div>
+                  )}
+                  {isInCall && (
+                    <div className="text-sm text-green-600 bg-green-50 px-2 py-1 border border-green-300 font-medium">
+                      🎤 通話中
+                    </div>
+                  )}
                 </div>
 
                 <div className="space-y-3">
