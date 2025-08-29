@@ -399,28 +399,36 @@ export default function App({ forcedRole, onBack }: AppProps & { onBack?: () => 
   }
 
   return (
-    <div className={`min-h-screen ${page==='call' ? 'bg-white' : 'bg-gradient-to-br from-slate-100 to-slate-200'} p-4 md:p-8 overflow-hidden`}>
+    <div className={`min-h-screen ${page==='call' ? 'bg-white' : 'bg-gradient-to-br from-slate-100 to-slate-200'} p-2 md:p-4 overflow-hidden`}>
       {/* Call/Recepton は背景を白にしてコンテンツと分離しない */}
       <div className={`h-full flex flex-col ${page==='call' ? 'mx-0 w-full' : 'mx-auto max-w-5xl rounded-2xl shadow-2xl bg-white/80 backdrop-blur-md border border-slate-200'}`}>
         {toast && <div className="fixed top-4 right-4 z-50 rounded-xl bg-black/90 text-white px-4 py-2 text-base shadow-2xl font-semibold tracking-wide animate-fadein">{toast}</div>}
 
-        <header className={`flex items-center justify-between px-4 pb-2 mb-6 border-b border-slate-200 bg-white/70 ${page==='call' ? '' : 'rounded-t-2xl'}`}>
-          <div className="home-font text-3xl font-extrabold pr-1 bg-gradient-to-r from-sky-400 to-slate-500 bg-clip-text text-transparent drop-shadow-sm select-none" style={{letterSpacing:'-1px'}}>{headerTitle}</div>
+        <header className={`flex items-center justify-between pb-2 mb-6 border-b border-slate-200 bg-white/70 ${page==='call' ? '' : 'rounded-t-2xl'}`}>
+          <div className="flex items-center">
+            {onBack && (
+              <button onClick={onBack} className="flex items-center justify-center w-10 h-14 hover:opacity-80 transition-opacity cursor-pointer">
+                <img src="/back-icon.png" alt="戻る" className="w-full h-full object-contain" />
+              </button>
+            )}
+            <div className="home-font text-3xl font-extrabold pr-1 bg-gradient-to-r from-sky-400 to-slate-500 bg-clip-text text-transparent drop-shadow-sm select-none" style={{letterSpacing:'-1px'}}>{headerTitle}</div>
+          </div>
           <div className="flex gap-2 items-center">
             <button className={`px-4 py-2 rounded-lg font-semibold transition-all duration-150 border-2 ${tab==="call" ? "bg-blue-600 text-white border-blue-600 shadow-md" : "bg-white text-blue-700 border-blue-200 hover:bg-blue-50"}`} onClick={()=>setTab("call")}>通話</button>
-            <button className={`px-4 py-2 rounded-lg font-semibold transition-all duration-150 border-2 ${tab==="settings" ? "bg-blue-600 text-white border-blue-600 shadow-md" : "bg-white text-blue-700 border-blue-200 hover:bg-blue-50"}`} onClick={()=>setTab("settings")}>設定</button>
-            {onBack && (
-              <button onClick={onBack} className="ml-4 px-4 py-2 rounded-lg font-semibold border-2 border-gray-400 bg-white text-gray-700 hover:bg-gray-100 transition-all">ホームへ戻る</button>
-            )}
           </div>
         </header>
 
         {tab === "call" ? (
-          <div className={`flex-1 flex flex-col lg:flex-row overflow-hidden bg-gray-100 ${ (showConnectionUI && showMediaUI) ? 'gap-3 p-3' : 'gap-0 p-0' }`}>
+          <div className={`flex-1 flex flex-col lg:flex-row overflow-hidden bg-white ${ (showConnectionUI && showMediaUI) ? 'gap-3 p-3' : 'gap-0 p-0' }`}>
             {/* 左側：接続設定 */}
             <div className={`flex-shrink-0 ${showConnectionUI ? (showMediaUI ? 'w-full lg:w-1/2' : 'w-full lg:w-full') : 'w-0 lg:w-0'} space-y-3 transition-all ${showConnectionUI ? '' : 'opacity-0 pointer-events-none max-h-0 overflow-hidden'}`}>
-              <div className="bg-white border border-gray-300 p-3">
-                <h2 className="text-base font-semibold text-gray-800 mb-3 pb-2 border-b border-gray-300">接続設定</h2>
+              <div>
+                <div className="flex items-center justify-between mb-3 pb-2 border-b border-gray-300">
+                  <h2 className="text-base font-semibold text-gray-800">接続設定</h2>
+                  <button onClick={() => setTab("settings")} className="flex items-center justify-center w-6 h-6 hover:opacity-80 transition-opacity cursor-pointer">
+                    <img src="/icon-settings.png" alt="設定" className="w-full h-full object-contain" />
+                  </button>
+                </div>
                 <div className="flex flex-wrap items-center gap-2 mb-3">
                   <button onClick={micEnabled?stopMic:startMic} className={"px-3 py-2 text-white text-sm font-medium border " + (micEnabled ? "bg-red-600 border-red-600" : "bg-blue-600 border-blue-600")}>
                     {micEnabled ? "Stop Mic" : "Start Mic"}
@@ -428,82 +436,76 @@ export default function App({ forcedRole, onBack }: AppProps & { onBack?: () => 
                   <button onClick={toggleMute} disabled={!micEnabled} className={"px-3 py-2 text-white text-sm font-medium border " + (!micEnabled ? "bg-gray-400 border-gray-400 cursor-not-allowed" : (micMuted ? "bg-amber-600 border-amber-600" : "bg-amber-500 border-amber-500"))}>
                     {micMuted ? "Unmute" : "Mute"}
                   </button>
-                  {isInCall && (
-                    <button onClick={endCall} className="px-3 py-2 text-white text-sm font-medium border bg-red-700 border-red-700">
-                      通話終了
-                    </button>
-                  )}
-                  <button onClick={createNewConnection} className="px-3 py-2 text-white text-sm font-medium border bg-gray-600 border-gray-600">
-                    新規接続
-                  </button>
-                  <div className="text-sm text-gray-600 bg-gray-50 px-2 py-1 border border-gray-300">
-                    PC: {connState} / ICE: {iceState} / DC: {dcState}
-                  </div>
-                  {localStreamRef.current && (
-                    <div className="text-sm text-blue-600 bg-blue-50 px-2 py-1 border border-blue-300">
-                      🎤 ローカル音声: {localStreamRef.current.getAudioTracks().length}トラック
-                    </div>
-                  )}
-                  {isInCall && (
-                    <div className="text-sm text-green-600 bg-green-50 px-2 py-1 border border-green-300 font-medium">
-                      🎤 通話中
-                    </div>
-                  )}
                 </div>
 
-                <div className="space-y-3">
-                  <div>
-                    <h3 className="font-medium text-gray-700 mb-2 text-sm">Local SDP（相手へ渡す）</h3>
-                    <div className="relative">
-                      <textarea ref={localSDPRef} className="w-full h-40 border border-gray-300 p-2 text-sm font-mono bg-gray-50" readOnly />
-                      <button
-                        onClick={async ()=>{ try{ await navigator.clipboard.writeText(localSDPRef.current?.value||""); setCopiedLocal(true); showToast("Local SDP copied"); setTimeout(()=>setCopiedLocal(false),1200);}catch{} }}
-                        className={"absolute top-2 right-2 px-2 py-1 text-white text-sm border " + (copiedLocal ? "bg-green-600 border-green-600" : "bg-gray-600 border-gray-600")}
-                      >{copiedLocal?"Copied!":"Copy"}</button>
-                    </div>
-                    <p className="text-xs text-gray-500 mt-1">Caller は Offer、Answerer は Answer をここに出力します。</p>
-                  </div>
-                  <div>
-                    <h3 className="font-medium text-gray-700 mb-2 text-sm">Remote SDP（相手から貼付け）</h3>
-                    <textarea ref={remoteSDPRef} className="w-full h-40 border border-gray-300 p-2 text-sm font-mono bg-gray-50" placeholder="相手から受け取った JSON を貼り付け" />
-                    <div className="flex flex-wrap gap-2 mt-2">
-                      {role === "caller" && (
-                        <button onClick={createOffer} disabled={creatingOffer} className={"px-3 py-2 text-white text-sm font-medium border " + (creatingOffer ? "bg-indigo-400 border-indigo-400 cursor-not-allowed" : "bg-indigo-600 border-indigo-600")}>
-                          {creatingOffer ? "Creating..." : "Create Offer（Caller）"}
+                {micEnabled && (
+                  <>
+                    {isInCall && (
+                      <div className="flex flex-wrap items-center gap-2 mb-3">
+                        <button onClick={endCall} className="px-3 py-2 text-white text-sm font-medium border bg-red-700 border-red-700">
+                          通話終了
                         </button>
-                      )}
-                      <button onClick={acceptOfferAndCreateAnswer} disabled={answering || role!=="answerer"} className={"px-3 py-2 text-white text-sm font-medium border " + (role!=="answerer" ? "bg-gray-400 border-gray-400 cursor-not-allowed" : (answering ? "bg-indigo-400 border-indigo-400 cursor-not-allowed" : "bg-indigo-600 border-indigo-600"))}>
-                        {answering ? "Answering..." : "Paste Offer → Create Answer（Answerer）"}
-                      </button>
-                      <button onClick={setRemoteDescriptionManual} disabled={settingRemote} className={"px-3 py-2 text-white text-sm font-medium border " + (settingRemote ? "bg-gray-400 border-gray-400 cursor-not-allowed" : "bg-gray-600 border-gray-600")}>
-                        {settingRemote ? "Setting..." : "Set Remote Description"}
-                      </button>
-
-                      {/* forcedRoleがない場合のみロール切替UIを表示 */}
-                      {!forcedRole && (
-                        <div className="flex items-center gap-2 ml-auto">
-                          <label className="text-sm font-medium text-gray-700">Role:</label>
-                          <select className="border border-gray-300 px-2 py-1 text-sm bg-white" value={role} onChange={(e)=>setRole(e.target.value as Role)}>
-                            <option value="caller">Caller</option>
-                            <option value="answerer">Answerer</option>
-                          </select>
+                        <div className="text-sm text-green-600 bg-green-50 px-2 py-1 border border-green-300 font-medium">
+                          🎤 通話中
                         </div>
-                      )}
+                      </div>
+                    )}
+
+                    <div className="space-y-3">
+                      <div>
+                        <h3 className="font-medium text-gray-700 mb-2 text-sm">Local SDP（相手へ渡す）</h3>
+                        <div className="relative">
+                          <textarea ref={localSDPRef} className="w-full h-40 border border-gray-300 p-2 text-sm font-mono bg-gray-50" readOnly />
+                          <button
+                            onClick={async ()=>{ try{ await navigator.clipboard.writeText(localSDPRef.current?.value||""); setCopiedLocal(true); showToast("Local SDP copied"); setTimeout(()=>setCopiedLocal(false),1200);}catch{} }}
+                            className={"absolute top-2 right-2 px-2 py-1 text-white text-sm border " + (copiedLocal ? "bg-green-600 border-green-600" : "bg-gray-600 border-gray-600")}
+                          >{copiedLocal?"Copied!":"Copy"}</button>
+                        </div>
+                        <p className="text-xs text-gray-500 mt-1">Caller は Offer、Answerer は Answer をここに出力します。</p>
+                      </div>
+                      <div>
+                        <h3 className="font-medium text-gray-700 mb-2 text-sm">Remote SDP（相手から貼付け）</h3>
+                        <textarea ref={remoteSDPRef} className="w-full h-40 border border-gray-300 p-2 text-sm font-mono bg-gray-50" placeholder="相手から受け取った JSON を貼り付け" />
+                        <div className="flex flex-wrap gap-2 mt-2">
+                          {role === "caller" && (
+                            <button onClick={createOffer} disabled={creatingOffer} className={"px-3 py-2 text-white text-sm font-medium border " + (creatingOffer ? "bg-indigo-400 border-indigo-400 cursor-not-allowed" : "bg-indigo-600 border-indigo-600")}>
+                              {creatingOffer ? "Creating..." : "Create Offer（Caller）"}
+                            </button>
+                          )}
+                          <button onClick={acceptOfferAndCreateAnswer} disabled={answering || role!=="answerer"} className={"px-3 py-2 text-white text-sm font-medium border " + (role!=="answerer" ? "bg-gray-400 border-gray-400 cursor-not-allowed" : (answering ? "bg-indigo-400 border-indigo-400 cursor-not-allowed" : "bg-indigo-600 border-indigo-600"))}>
+                            {answering ? "Answering..." : "Paste Offer → Create Answer（Answerer）"}
+                          </button>
+                          <button onClick={setRemoteDescriptionManual} disabled={settingRemote} className={"px-3 py-2 text-white text-sm font-medium border " + (settingRemote ? "bg-gray-400 border-gray-400 cursor-not-allowed" : "bg-gray-600 border-gray-600")}>
+                            {settingRemote ? "Setting..." : "Set Remote Description"}
+                          </button>
+
+                          {/* forcedRoleがない場合のみロール切替UIを表示 */}
+                          {!forcedRole && (
+                            <div className="flex items-center gap-2 ml-auto">
+                              <label className="text-sm font-medium text-gray-700">Role:</label>
+                              <select className="border border-gray-300 px-2 py-1 text-sm bg-white" value={role} onChange={(e)=>setRole(e.target.value as Role)}>
+                                <option value="caller">Caller</option>
+                                <option value="answerer">Answerer</option>
+                              </select>
+                            </div>
+                          )}
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                </div>
+                  </>
+                )}
               </div>
             </div>
 
             {/* 右側：音声と字幕 */}
             <div className={`${showMediaUI ? 'w-full lg:w-full' : 'w-0 lg:w-0'} flex-1 flex flex-col space-y-3 transition-all ${showMediaUI ? '' : 'opacity-0 pointer-events-none max-h-0 overflow-hidden'}`}>
-              <div className="bg-white border border-gray-300 p-3">
+              <div>
                 <h2 className="text-base font-semibold text-gray-800 mb-3 pb-2 border-b border-gray-300">音声</h2>
                 <audio ref={remoteAudioRef} autoPlay playsInline controls className="w-full" />
                 <p className="text-sm text-gray-600 mt-2">双方で「Start Mic」を押すとリアルタイム音声通話が始まります。</p>
               </div>
 
-              <div className="bg-white border border-gray-300 p-3 flex-1 overflow-hidden">
+              <div className="flex-1 overflow-hidden">
                 <h2 className="text-base font-semibold text-gray-800 mb-3 pb-2 border-b border-gray-300">字幕（DataChannel）</h2>
                 <div className="flex items-center gap-2 flex-wrap mb-3">
                   <input className="flex-1 min-w-0 border border-gray-300 px-2 py-2 bg-white" value={sendText} onChange={(e)=>setSendText(e.target.value)} onKeyDown={(e)=>{ if(e.key==='Enter'){ e.preventDefault(); sendCaption(); }}} placeholder="字幕として送りたいテキスト"/>
