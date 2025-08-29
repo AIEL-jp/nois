@@ -55,6 +55,10 @@ export default function App({ forcedRole, onBack }: AppProps & { onBack?: () => 
   const [answererLocalSDPValue, setAnswererLocalSDPValue] = useState<string>("");
   // Answerer側のRemote SDP入力値監視用
   const [answererRemoteSDPInput, setAnswererRemoteSDPInput] = useState<string>("");
+  // カメラ表示の状態管理
+  const [showCamera, setShowCamera] = useState<boolean>(false);
+  // 通話時間管理
+  const [callDuration, setCallDuration] = useState<number>(0);
 
   // Translation / TTS
   const [fromLang, setFromLang] = useState<Lang>("auto");
@@ -112,6 +116,28 @@ export default function App({ forcedRole, onBack }: AppProps & { onBack?: () => 
     loadVoices();
     window.speechSynthesis.onvoiceschanged = loadVoices;
   }, [ttsVoiceName]);
+
+  // 通話時間の更新
+  useEffect(() => {
+    let interval: number;
+    if (isInCall) {
+      interval = setInterval(() => {
+        setCallDuration(prev => prev + 1);
+      }, 1000);
+    } else {
+      setCallDuration(0);
+    }
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [isInCall]);
+
+  // 通話時間をフォーマットする関数
+  const formatCallDuration = (seconds: number): string => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  };
 
   function showToast(msg: string) { setToast(msg); setTimeout(()=>setToast(""), 1500); }
 
@@ -439,7 +465,7 @@ export default function App({ forcedRole, onBack }: AppProps & { onBack?: () => 
       <div className={`h-full flex flex-col ${page==='call' ? 'mx-0 w-full' : 'mx-auto max-w-5xl rounded-2xl shadow-2xl bg-white/80 backdrop-blur-md border border-slate-200'}`}>
         {toast && <div className="fixed top-4 right-4 z-50 rounded-xl bg-black/90 text-white px-4 py-2 text-base shadow-2xl font-semibold tracking-wide animate-fadein">{toast}</div>}
 
-        <header className={`flex items-center justify-between pb-2 mb-6 border-b border-slate-200 bg-white/70 ${page==='call' ? '' : 'rounded-t-2xl'}`}>
+        <header className={`flex items-center justify-between pb-2 border-b border-slate-200 bg-white/70 ${page==='call' ? '' : 'rounded-t-2xl'}`}>
           <div className="flex items-center">
             {onBack && (
               <button onClick={onBack} className="flex items-center justify-center w-10 h-14 hover:opacity-80 transition-opacity cursor-pointer">
@@ -473,7 +499,7 @@ export default function App({ forcedRole, onBack }: AppProps & { onBack?: () => 
 
                 {micEnabled && (
                   <>
-                    {isInCall && (
+                    {isInCall && role === "caller" && (
                       <div className="flex flex-wrap items-center gap-2 mb-3">
                         <button onClick={endCall} className="px-3 py-2 text-white text-sm font-medium border rounded bg-red-700 border-red-700">
                           通話終了
@@ -502,7 +528,7 @@ export default function App({ forcedRole, onBack }: AppProps & { onBack?: () => 
                             >{copiedLocal?"Copied!":"Copy"}</button>
                           </div>
                           <div className="flex justify-center mt-2">
-                            <button onClick={createOffer} disabled={creatingOffer} className={"px-3 py-2 text-white text-lg font-medium border rounded " + (creatingOffer ? "bg-indigo-400 border-indigo-400 cursor-not-allowed" : "bg-indigo-600 border-indigo-600")}>
+                            <button onClick={createOffer} disabled={creatingOffer} className={"px-6 py-2 text-white text-lg font-medium border rounded min-w-32 " + (creatingOffer ? "bg-indigo-400 border-indigo-400 cursor-not-allowed" : "bg-indigo-600 border-indigo-600")}>
                               {creatingOffer ? "Creating..." : "Create"}
                             </button>
                           </div>
@@ -515,7 +541,7 @@ export default function App({ forcedRole, onBack }: AppProps & { onBack?: () => 
                           <h3 className="font-medium text-gray-700 mb-2 text-sm">Paste Pairing Code</h3>
                           <textarea ref={remoteSDPRef} className="w-full h-16 border border-gray-300 p-2 text-sm font-mono bg-gray-50" placeholder="Paste the pairing code here." />
                           <div className="flex justify-center mt-2">
-                            <button onClick={setRemoteDescriptionManual} disabled={settingRemote} className={"px-3 py-2 text-white text-lg font-medium border rounded " + (settingRemote ? "bg-indigo-400 border-indigo-400 cursor-not-allowed" : "bg-indigo-600 border-indigo-600")}>
+                            <button onClick={setRemoteDescriptionManual} disabled={settingRemote} className={"px-6 py-2 text-white text-lg font-medium border rounded min-w-32 " + (settingRemote ? "bg-indigo-400 border-indigo-400 cursor-not-allowed" : "bg-indigo-600 border-indigo-600")}>
                               {settingRemote ? "Setting..." : "Start a call"}
                             </button>
                           </div>
@@ -535,7 +561,7 @@ export default function App({ forcedRole, onBack }: AppProps & { onBack?: () => 
                             />
                             {answererRemoteSDPInput.trim() && (
                               <div className="flex justify-center mt-2">
-                                <button onClick={acceptOfferAndCreateAnswer} disabled={answering} className={"px-3 py-2 text-white text-lg font-medium border rounded " + (answering ? "bg-indigo-400 border-indigo-400 cursor-not-allowed" : "bg-indigo-600 border-indigo-600")}>
+                                <button onClick={acceptOfferAndCreateAnswer} disabled={answering} className={"px-6 py-2 text-white text-lg font-medium border rounded min-w-32 " + (answering ? "bg-indigo-400 border-indigo-400 cursor-not-allowed" : "bg-indigo-600 border-indigo-600")}>
                                   {answering ? "Answering..." : "Create"}
                                 </button>
                               </div>
@@ -557,8 +583,8 @@ export default function App({ forcedRole, onBack }: AppProps & { onBack?: () => 
                                 >{copiedLocal?"Copied!":"Copy"}</button>
                               </div>
                               <div className="flex justify-center mt-2">
-                                <button onClick={setRemoteDescriptionManual} disabled={settingRemote} className={"px-3 py-2 text-white text-sm font-medium border rounded " + (settingRemote ? "bg-indigo-400 border-indigo-400 cursor-not-allowed" : "bg-indigo-600 border-indigo-600")}>
-                                  {settingRemote ? "Setting..." : "Set Remote Description"}
+                                <button onClick={setRemoteDescriptionManual} disabled={settingRemote} className={"px-6 py-2 text-white text-lg font-medium border rounded min-w-32 " + (settingRemote ? "bg-indigo-400 border-indigo-400 cursor-not-allowed" : "bg-indigo-600 border-indigo-600")}>
+                                  {settingRemote ? "Setting..." : "Start a call"}
                                 </button>
                               </div>
                             </div>
@@ -584,6 +610,51 @@ export default function App({ forcedRole, onBack }: AppProps & { onBack?: () => 
 
             {/* 右側：音声と字幕 */}
             <div className={`${showMediaUI ? 'w-full lg:w-full' : 'w-0 lg:w-0'} flex-1 flex flex-col space-y-3 transition-all ${showMediaUI ? '' : 'opacity-0 pointer-events-none max-h-0 overflow-hidden'}`}>
+              {/* カメラ表示エリア */}
+              <div>
+                {/* 上部のIndigo長方形 */}
+                <div className="w-full h-8 bg-indigo-800 flex items-center px-4">
+                  {isInCall && (
+                    <div className="text-white text-sm font-medium">
+                      {formatCallDuration(callDuration)}
+                    </div>
+                  )}
+                </div>
+                
+                {/* カメラ表示エリア */}
+                <div className="w-full h-64 bg-gray-300 flex items-center justify-center relative">
+                  {!showCamera ? (
+                    <div className="text-center">
+                      <div className="text-6xl mb-4">📹</div>
+                      <div className="text-lg text-gray-600 mb-4">カメラが無効です</div>
+                      <button 
+                        onClick={() => setShowCamera(true)} 
+                        className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded hover:bg-blue-700 transition-colors"
+                      >
+                        カメラを有効にする
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center">
+                      <div className="text-center">
+                        <div className="text-6xl mb-4">📹</div>
+                        <div className="text-lg text-gray-600 mb-4">カメラ映像</div>
+                        <div className="text-sm text-gray-500">ビデオ通話中</div>
+                        <button 
+                          onClick={() => setShowCamera(false)} 
+                          className="mt-3 px-4 py-2 bg-red-600 text-white text-sm font-medium rounded hover:bg-red-700 transition-colors"
+                        >
+                          カメラを無効にする
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+                
+                {/* 下部のIndigo長方形 */}
+                <div className="w-full h-8 bg-indigo-800"></div>
+              </div>
+
               <div>
                 <h2 className="text-base font-semibold text-gray-800 mb-3 pb-2 border-b border-gray-300">音声</h2>
                 <div className="flex items-center gap-2 mb-3">
