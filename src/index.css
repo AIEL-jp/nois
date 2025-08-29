@@ -6,3 +6,7 @@
 .tab { @apply px-4 py-2 rounded-full border; }
 .tab-active { @apply bg-black text-white border-black; }
 .tab-inactive { @apply bg-white text-black; }
+
+/* 丸ゴシック（ホーム画面向け） */
+@import url('https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@400;700&display=swap');
+.home-font { font-family: 'M PLUS Rounded 1c', 'Noto Sans JP', system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; }

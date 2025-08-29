@@ -14,10 +14,10 @@ const icons = {
 
 export default function Home({ onCall, onReception }: { onCall: () => void, onReception?: () => void }) {
   return (
-    <div className="min-h-screen flex flex-col bg-white">
+    <div className="min-h-screen flex flex-col bg-white home-font">
       {/* ヘッダー */}
-      <header className="flex items-center justify-between px-4 pt-4 pb-2">
-        <div className="text-3xl font-extrabold bg-gradient-to-r from-sky-400 to-slate-500 bg-clip-text text-transparent drop-shadow-sm select-none" style={{letterSpacing:'-2px'}}>Nois</div>
+      <header className="flex items-center justify-between px-4 pt-4 pb-2 overflow-visible">
+            <div className="text-3xl font-extrabold pr-1 bg-gradient-to-r from-sky-400 to-slate-500 bg-clip-text text-transparent drop-shadow-sm select-none" style={{letterSpacing:'-1px'}}>Nois</div>
         <div className="text-slate-500">{icons.user}</div>
       </header>
 
@@ -38,7 +38,7 @@ export default function Home({ onCall, onReception }: { onCall: () => void, onRe
             </button>
             <button onClick={onReception} className="flex flex-row items-center justify-center border-2 border-slate-300 rounded-xl py-3 bg-white shadow-md active:scale-95 transition-all gap-2">
               <img src="/reception-icon.png" alt="reception" className="w-10 h-10 object-contain" />
-              <span className="text-xl font-extrabold bg-gradient-to-r from-slate-600 to-slate-400 bg-clip-text text-transparent">Reception</span>
+              <span className="text-xl font-extrabold bg-gradient-to-r from-slate-600 to-slate-400 bg-clip-text text-transparent">reception</span>
             </button>
           </div>
         </div>

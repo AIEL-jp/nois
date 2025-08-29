@@ -6,15 +6,12 @@ type Role = "caller" | "answerer";
 
 interface AppProps {
   forcedRole?: Role;
-  roleLabel?: string;
-  roleDescription?: string;
-  roleColor?: string;
 }
 const iceServers: RTCIceServer[] = [{ urls: "stun:stun.l.google.com:19302" }];
 
 type Tab = "call" | "settings";
 
-export default function App({ forcedRole, onBack, roleLabel, roleDescription, roleColor }: AppProps & { onBack?: () => void } = {}) {
+export default function App({ forcedRole, onBack }: AppProps & { onBack?: () => void } = {}) {
   const [page, setPage] = useState<'home'|'call'>('home');
   const [tab, setTab] = useState<Tab>("call");
   const [pc, setPc] = useState<RTCPeerConnection | null>(null);
@@ -44,8 +41,10 @@ export default function App({ forcedRole, onBack, roleLabel, roleDescription, ro
   const [connState, setConnState] = useState<RTCPeerConnectionState | "new">("new");
   const [iceState, setIceState] = useState<RTCIceConnectionState | "new">("new");
   const [isInCall, setIsInCall] = useState(false);
-  // UI: 通話画面を表示するフラグ（Create Answer の直後は true にしない）
-  const [uiCallStarted, setUiCallStarted] = useState(false);
+  // UI: 通話接続後に音声/字幕を表示するか（Caller/Answerから遷移した場合は最初は非表示）
+  const [showMediaUI, setShowMediaUI] = useState<boolean>(forcedRole ? false : true);
+  // UI: 接続設定を表示するか。Set Remote Description後は非表示にする（ただし機能は隠すだけ）
+  const [showConnectionUI, setShowConnectionUI] = useState<boolean>(true);
 
   // Translation / TTS
   const [fromLang, setFromLang] = useState<Lang>("auto");
@@ -69,12 +68,10 @@ export default function App({ forcedRole, onBack, roleLabel, roleDescription, ro
       const newState = p.connectionState;
       setConnState(newState);
       if (newState === "connected") {
-  setIsInCall(true);
-  setUiCallStarted(true);
+        setIsInCall(true);
         showToast("音声通話が接続されました");
       } else if (newState === "disconnected" || newState === "failed" || newState === "closed") {
         setIsInCall(false);
-  setUiCallStarted(false);
         showToast("音声通話が切断されました");
       }
     };
@@ -127,6 +124,11 @@ export default function App({ forcedRole, onBack, roleLabel, roleDescription, ro
         if (msg.type === "caption") {
           setCaptions((old) => [...old.slice(-50), msg.text]);
           if (speakOnReceive) speak(msg.text);
+        } else if (msg.type === "show_media_ui") {
+          // 相手からの通知でメディアUIを表示し、接続設定を隠す
+          setShowMediaUI(true);
+          setShowConnectionUI(false);
+          showToast("相手が通話を開始しました");
         }
       } catch {}
     };
@@ -203,7 +205,6 @@ export default function App({ forcedRole, onBack, roleLabel, roleDescription, ro
     setMicEnabled(false);
     setMicMuted(false);
     setIsInCall(false);
-  setUiCallStarted(false);
     setConnState("new");
     setIceState("new");
     setDcState("closed");
@@ -308,11 +309,11 @@ export default function App({ forcedRole, onBack, roleLabel, roleDescription, ro
         return;
       }
       
-  const answer = await pc.createAnswer();
-  await pc.setLocalDescription(answer);
-  await waitForICEGathering(pc);
-  localSDPRef.current!.value = JSON.stringify(pc.localDescription);
-  showToast("Answer created - 音声トラックが含まれています");
+      const answer = await pc.createAnswer();
+      await pc.setLocalDescription(answer);
+      await waitForICEGathering(pc);
+      localSDPRef.current!.value = JSON.stringify(pc.localDescription);
+      showToast("Answer created - 音声トラックが含まれています");
     } finally { setAnswering(false); }
   }
   async function setRemoteDescriptionManual() {
@@ -320,10 +321,18 @@ export default function App({ forcedRole, onBack, roleLabel, roleDescription, ro
     setSettingRemote(true);
     try {
       const remote = JSON.parse(remoteSDPRef.current.value);
-      await pc.setRemoteDescription(remote);
-      showToast("Remote description set");
-  // ユーザーが明示的に Remote Description をセットしたときに UI を通話画面へ切替
-  setUiCallStarted(true);
+  await pc.setRemoteDescription(remote);
+  showToast("Remote description set");
+  // ユーザー要望: Set Remote Description の後に接続設定を隠して
+  // 音声・字幕を表示する（ただし機能はDOMに残す）
+      setShowMediaUI(true);
+      setShowConnectionUI(false);
+      // dataChannel が開いていれば相手にも UI 切替を通知
+      try {
+        if (dataChannel && dataChannel.readyState === 'open') {
+          dataChannel.send(JSON.stringify({ type: 'show_media_ui' }));
+        }
+      } catch {}
     } finally { setSettingRemote(false); }
   }
 
@@ -363,6 +372,15 @@ export default function App({ forcedRole, onBack, roleLabel, roleDescription, ro
   const voices = voicesRef.current;
   const voiceOptions = useMemo(() => voices.map(v => ({ name: v.name, lang: v.lang })), [voices]);
 
+  // ヘッダータイトル：role / forcedRole に応じて表示を変更
+  const headerTitle = (() => {
+    if (page === 'home') return 'Nois WebRTC';
+    const r = forcedRole ?? role;
+    if (r === 'caller') return 'Call';
+    if (r === 'answerer') return 'Reception';
+    return 'Nois WebRTC';
+  })();
+
   if (page === 'home') {
     // forcedRoleがある場合は直接call画面に遷移
     if (forcedRole) {
@@ -381,12 +399,13 @@ export default function App({ forcedRole, onBack, roleLabel, roleDescription, ro
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-100 to-slate-200 p-4 md:p-8 overflow-hidden">
-      <div className="h-full mx-auto max-w-5xl flex flex-col rounded-2xl shadow-2xl bg-white/80 backdrop-blur-md border border-slate-200">
+    <div className={`min-h-screen ${page==='call' ? 'bg-white' : 'bg-gradient-to-br from-slate-100 to-slate-200'} p-4 md:p-8 overflow-hidden`}>
+      {/* Call/Recepton は背景を白にしてコンテンツと分離しない */}
+      <div className={`h-full flex flex-col ${page==='call' ? 'mx-0 w-full' : 'mx-auto max-w-5xl rounded-2xl shadow-2xl bg-white/80 backdrop-blur-md border border-slate-200'}`}>
         {toast && <div className="fixed top-4 right-4 z-50 rounded-xl bg-black/90 text-white px-4 py-2 text-base shadow-2xl font-semibold tracking-wide animate-fadein">{toast}</div>}
 
-        <header className="flex items-center justify-between gap-4 mb-2 border-b border-slate-200 px-4 py-3 bg-white/70 rounded-t-2xl">
-          <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight text-slate-800 drop-shadow-sm">Nois WebRTC</h1>
+        <header className={`flex items-center justify-between px-4 pb-2 mb-6 border-b border-slate-200 bg-white/70 ${page==='call' ? '' : 'rounded-t-2xl'}`}>
+          <div className="home-font text-3xl font-extrabold pr-1 bg-gradient-to-r from-sky-400 to-slate-500 bg-clip-text text-transparent drop-shadow-sm select-none" style={{letterSpacing:'-1px'}}>{headerTitle}</div>
           <div className="flex gap-2 items-center">
             <button className={`px-4 py-2 rounded-lg font-semibold transition-all duration-150 border-2 ${tab==="call" ? "bg-blue-600 text-white border-blue-600 shadow-md" : "bg-white text-blue-700 border-blue-200 hover:bg-blue-50"}`} onClick={()=>setTab("call")}>通話</button>
             <button className={`px-4 py-2 rounded-lg font-semibold transition-all duration-150 border-2 ${tab==="settings" ? "bg-blue-600 text-white border-blue-600 shadow-md" : "bg-white text-blue-700 border-blue-200 hover:bg-blue-50"}`} onClick={()=>setTab("settings")}>設定</button>
@@ -395,26 +414,25 @@ export default function App({ forcedRole, onBack, roleLabel, roleDescription, ro
             )}
           </div>
         </header>
-        {roleLabel && (
-          <div className="mb-4 flex items-center gap-3 px-4">
-            <span className="px-3 py-1 rounded-full text-white font-bold text-base" style={{background: roleColor||'#2563eb'}}>{roleLabel}</span>
-            {roleDescription && <span className="text-gray-700 text-sm">{roleDescription}</span>}
-          </div>
-        )}
 
         {tab === "call" ? (
-          !uiCallStarted ? (
-            // --- 接続設定画面（通話前） ---
-            <div className="flex-1 flex flex-col gap-3 overflow-hidden bg-gray-100 p-3">
-              <div className="bg-white border border-gray-300 p-3 max-w-xl mx-auto">
+          <div className={`flex-1 flex flex-col lg:flex-row overflow-hidden bg-gray-100 ${ (showConnectionUI && showMediaUI) ? 'gap-3 p-3' : 'gap-0 p-0' }`}>
+            {/* 左側：接続設定 */}
+            <div className={`flex-shrink-0 ${showConnectionUI ? (showMediaUI ? 'w-full lg:w-1/2' : 'w-full lg:w-full') : 'w-0 lg:w-0'} space-y-3 transition-all ${showConnectionUI ? '' : 'opacity-0 pointer-events-none max-h-0 overflow-hidden'}`}>
+              <div className="bg-white border border-gray-300 p-3">
                 <h2 className="text-base font-semibold text-gray-800 mb-3 pb-2 border-b border-gray-300">接続設定</h2>
                 <div className="flex flex-wrap items-center gap-2 mb-3">
-                  <button onClick={micEnabled?stopMic:startMic} className={"px-3 py-2 text-white text-sm font-medium border " + (micEnabled ? "bg-red-600 border-red-600" : "bg-blue-600 border-blue-600")}> 
+                  <button onClick={micEnabled?stopMic:startMic} className={"px-3 py-2 text-white text-sm font-medium border " + (micEnabled ? "bg-red-600 border-red-600" : "bg-blue-600 border-blue-600")}>
                     {micEnabled ? "Stop Mic" : "Start Mic"}
                   </button>
                   <button onClick={toggleMute} disabled={!micEnabled} className={"px-3 py-2 text-white text-sm font-medium border " + (!micEnabled ? "bg-gray-400 border-gray-400 cursor-not-allowed" : (micMuted ? "bg-amber-600 border-amber-600" : "bg-amber-500 border-amber-500"))}>
                     {micMuted ? "Unmute" : "Mute"}
                   </button>
+                  {isInCall && (
+                    <button onClick={endCall} className="px-3 py-2 text-white text-sm font-medium border bg-red-700 border-red-700">
+                      通話終了
+                    </button>
+                  )}
                   <button onClick={createNewConnection} className="px-3 py-2 text-white text-sm font-medium border bg-gray-600 border-gray-600">
                     新規接続
                   </button>
@@ -426,7 +444,13 @@ export default function App({ forcedRole, onBack, roleLabel, roleDescription, ro
                       🎤 ローカル音声: {localStreamRef.current.getAudioTracks().length}トラック
                     </div>
                   )}
+                  {isInCall && (
+                    <div className="text-sm text-green-600 bg-green-50 px-2 py-1 border border-green-300 font-medium">
+                      🎤 通話中
+                    </div>
+                  )}
                 </div>
+
                 <div className="space-y-3">
                   <div>
                     <h3 className="font-medium text-gray-700 mb-2 text-sm">Local SDP（相手へ渡す）</h3>
@@ -443,15 +467,18 @@ export default function App({ forcedRole, onBack, roleLabel, roleDescription, ro
                     <h3 className="font-medium text-gray-700 mb-2 text-sm">Remote SDP（相手から貼付け）</h3>
                     <textarea ref={remoteSDPRef} className="w-full h-40 border border-gray-300 p-2 text-sm font-mono bg-gray-50" placeholder="相手から受け取った JSON を貼り付け" />
                     <div className="flex flex-wrap gap-2 mt-2">
-                      <button onClick={createOffer} disabled={creatingOffer || role!=="caller"} className={"px-3 py-2 text-white text-sm font-medium border " + (role!=="caller" ? "bg-gray-400 border-gray-400 cursor-not-allowed" : (creatingOffer ? "bg-indigo-400 border-indigo-400 cursor-not-allowed" : "bg-indigo-600 border-indigo-600"))}>
-                        {creatingOffer ? "Creating..." : "Create Offer（Caller）"}
-                      </button>
+                      {role === "caller" && (
+                        <button onClick={createOffer} disabled={creatingOffer} className={"px-3 py-2 text-white text-sm font-medium border " + (creatingOffer ? "bg-indigo-400 border-indigo-400 cursor-not-allowed" : "bg-indigo-600 border-indigo-600")}>
+                          {creatingOffer ? "Creating..." : "Create Offer（Caller）"}
+                        </button>
+                      )}
                       <button onClick={acceptOfferAndCreateAnswer} disabled={answering || role!=="answerer"} className={"px-3 py-2 text-white text-sm font-medium border " + (role!=="answerer" ? "bg-gray-400 border-gray-400 cursor-not-allowed" : (answering ? "bg-indigo-400 border-indigo-400 cursor-not-allowed" : "bg-indigo-600 border-indigo-600"))}>
                         {answering ? "Answering..." : "Paste Offer → Create Answer（Answerer）"}
                       </button>
-                      <button onClick={setRemoteDescriptionManual} disabled={settingRemote} className={"px-3 py-2 text-white text-sm font-medium border " + (settingRemote ? "bg-gray-400 border-gray-400 cursor-not-allowed" : "bg-gray-600 border-gray-600")}> 
+                      <button onClick={setRemoteDescriptionManual} disabled={settingRemote} className={"px-3 py-2 text-white text-sm font-medium border " + (settingRemote ? "bg-gray-400 border-gray-400 cursor-not-allowed" : "bg-gray-600 border-gray-600")}>
                         {settingRemote ? "Setting..." : "Set Remote Description"}
                       </button>
+
                       {/* forcedRoleがない場合のみロール切替UIを表示 */}
                       {!forcedRole && (
                         <div className="flex items-center gap-2 ml-auto">
@@ -467,30 +494,29 @@ export default function App({ forcedRole, onBack, roleLabel, roleDescription, ro
                 </div>
               </div>
             </div>
-          ) : (
-            // --- 通話画面（音声＋字幕） ---
-            <div className="flex-1 flex flex-col lg:flex-row gap-3 overflow-hidden bg-gray-100 p-3">
-              <div className="flex-1 flex flex-col space-y-3">
-                <div className="bg-white border border-gray-300 p-3">
-                  <h2 className="text-base font-semibold text-gray-800 mb-3 pb-2 border-b border-gray-300">音声</h2>
-                  <audio ref={remoteAudioRef} autoPlay playsInline controls className="w-full" />
-                  <p className="text-sm text-gray-600 mt-2">双方で「Start Mic」を押すとリアルタイム音声通話が始まります。</p>
+
+            {/* 右側：音声と字幕 */}
+            <div className={`${showMediaUI ? 'w-full lg:w-full' : 'w-0 lg:w-0'} flex-1 flex flex-col space-y-3 transition-all ${showMediaUI ? '' : 'opacity-0 pointer-events-none max-h-0 overflow-hidden'}`}>
+              <div className="bg-white border border-gray-300 p-3">
+                <h2 className="text-base font-semibold text-gray-800 mb-3 pb-2 border-b border-gray-300">音声</h2>
+                <audio ref={remoteAudioRef} autoPlay playsInline controls className="w-full" />
+                <p className="text-sm text-gray-600 mt-2">双方で「Start Mic」を押すとリアルタイム音声通話が始まります。</p>
+              </div>
+
+              <div className="bg-white border border-gray-300 p-3 flex-1 overflow-hidden">
+                <h2 className="text-base font-semibold text-gray-800 mb-3 pb-2 border-b border-gray-300">字幕（DataChannel）</h2>
+                <div className="flex items-center gap-2 flex-wrap mb-3">
+                  <input className="flex-1 min-w-0 border border-gray-300 px-2 py-2 bg-white" value={sendText} onChange={(e)=>setSendText(e.target.value)} onKeyDown={(e)=>{ if(e.key==='Enter'){ e.preventDefault(); sendCaption(); }}} placeholder="字幕として送りたいテキスト"/>
+                  <button onClick={sendCaption} disabled={sendingCaption} className={"px-3 py-2 text-white text-sm font-medium border " + (sendingCaption ? "bg-gray-400 border-gray-400 cursor-not-allowed" : "bg-emerald-600 border-emerald-600")}>
+                    {sendingCaption? "Sending..." : (dcState==="open" ? "Send" : "Queue") }
+                  </button>
                 </div>
-                <div className="bg-white border border-gray-300 p-3 flex-1 overflow-hidden">
-                  <h2 className="text-base font-semibold text-gray-800 mb-3 pb-2 border-b border-gray-300">字幕（DataChannel）</h2>
-                  <div className="flex items-center gap-2 flex-wrap mb-3">
-                    <input className="flex-1 min-w-0 border border-gray-300 px-2 py-2 bg-white" value={sendText} onChange={(e)=>setSendText(e.target.value)} onKeyDown={(e)=>{ if(e.key==='Enter'){ e.preventDefault(); sendCaption(); }}} placeholder="字幕として送りたいテキスト"/>
-                    <button onClick={sendCaption} disabled={sendingCaption} className={"px-3 py-2 text-white text-sm font-medium border " + (sendingCaption ? "bg-gray-400 border-gray-400 cursor-not-allowed" : "bg-emerald-600 border-emerald-600")}> 
-                      {sendingCaption? "Sending..." : (dcState==="open" ? "Send" : "Queue") }
-                    </button>
-                  </div>
-                  <div className="h-64 overflow-auto border border-gray-300 p-3 bg-gray-50">
-                    <ul className="space-y-1">{captions.map((c,i)=>(<li key={i} className={`text-sm text-gray-700 border-b border-gray-200 pb-1 ${c.startsWith("(you) ") ? "text-left" : "text-right"}`}>{c}</li>))}</ul>
-                  </div>
+                <div className="h-64 overflow-auto border border-gray-300 p-3 bg-gray-50">
+                  <ul className="space-y-1">{captions.map((c,i)=>(<li key={i} className={`text-sm text-gray-700 border-b border-gray-200 pb-1 ${c.startsWith("(you) ") ? "text-left" : "text-right"}`}>{c}</li>))}</ul>
                 </div>
               </div>
             </div>
-          )
+          </div>
         ) : (
           <div className="flex-1 overflow-auto bg-gray-100 p-3">
             <div className="bg-white border border-gray-300 p-4">
