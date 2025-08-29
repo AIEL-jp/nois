@@ -1,15 +1,24 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Lang, Translator, detect, translate } from "./translate";
+import Home from "./Home";
 
 type Role = "caller" | "answerer";
+
+interface AppProps {
+  forcedRole?: Role;
+  roleLabel?: string;
+  roleDescription?: string;
+  roleColor?: string;
+}
 const iceServers: RTCIceServer[] = [{ urls: "stun:stun.l.google.com:19302" }];
 
 type Tab = "call" | "settings";
 
-export default function App() {
+export default function App({ forcedRole, onBack, roleLabel, roleDescription, roleColor }: AppProps & { onBack?: () => void } = {}) {
+  const [page, setPage] = useState<'home'|'call'>('home');
   const [tab, setTab] = useState<Tab>("call");
   const [pc, setPc] = useState<RTCPeerConnection | null>(null);
-  const [role, setRole] = useState<Role>("caller");
+  const [role, setRole] = useState<Role>(forcedRole ?? "caller");
   const localSDPRef = useRef<HTMLTextAreaElement>(null);
   const remoteSDPRef = useRef<HTMLTextAreaElement>(null);
   const [dataChannel, setDataChannel] = useState<RTCDataChannel | null>(null);
@@ -165,9 +174,11 @@ export default function App() {
     }
     
     // オーディオトラックを削除
-    for (const sender of pc.getSenders()) {
-      if (sender.track && sender.track.kind === "audio") {
-        pc.removeTrack(sender);
+    if (pc) {
+      for (const sender of pc.getSenders()) {
+        if (sender.track && sender.track.kind === "audio") {
+          pc.removeTrack(sender);
+        }
       }
     }
     
@@ -292,11 +303,11 @@ export default function App() {
         return;
       }
       
-      const answer = await pc.createAnswer();
-      await pc.setLocalDescription(answer);
-      await waitForICEGathering(pc);
-      localSDPRef.current!.value = JSON.stringify(pc.localDescription);
-      showToast("Answer created - 音声トラックが含まれています");
+  const answer = await pc.createAnswer();
+  await pc.setLocalDescription(answer);
+  await waitForICEGathering(pc);
+  localSDPRef.current!.value = JSON.stringify(pc.localDescription);
+  showToast("Answer created - 音声トラックが含まれています");
     } finally { setAnswering(false); }
   }
   async function setRemoteDescriptionManual() {
@@ -306,6 +317,7 @@ export default function App() {
       const remote = JSON.parse(remoteSDPRef.current.value);
       await pc.setRemoteDescription(remote);
       showToast("Remote description set");
+      setIsInCall(true);
     } finally { setSettingRemote(false); }
   }
 
@@ -345,37 +357,58 @@ export default function App() {
   const voices = voicesRef.current;
   const voiceOptions = useMemo(() => voices.map(v => ({ name: v.name, lang: v.lang })), [voices]);
 
-  return (
-    <div className="h-screen p-4 md:p-6 overflow-hidden">
-      <div className="h-full mx-auto max-w-6xl flex flex-col">
-        {toast && <div className="fixed top-4 right-4 z-50 rounded-lg bg-black/80 text-white px-3 py-2 text-sm shadow-lg">{toast}</div>}
+  if (page === 'home') {
+    // forcedRoleがある場合は直接call画面に遷移
+    if (forcedRole) {
+      setPage('call');
+      // ページ遷移後にレンダリングを止める
+      return null;
+    }
+    return <Home 
+      onCall={() => setPage('call')} 
+      onReception={() => {
+        // 受信ボタン押下時にAnswerer画面へ遷移（ただし通常Appでは未使用）
+        setRole('answerer');
+        setPage('call');
+      }}
+    />;
+  }
 
-        <header className="flex items-center justify-between gap-4 mb-4">
-          <h1 className="text-xl md:text-2xl font-bold">Manual WebRTC Call</h1>
-          <div className="flex gap-2">
-            <button className={"tab " + (tab==="call"?"tab-active":"tab-inactive")} onClick={()=>setTab("call")}>通話</button>
-            <button className={"tab " + (tab==="settings"?"tab-active":"tab-inactive")} onClick={()=>setTab("settings")}>設定</button>
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-slate-100 to-slate-200 p-4 md:p-8 overflow-hidden">
+      <div className="h-full mx-auto max-w-5xl flex flex-col rounded-2xl shadow-2xl bg-white/80 backdrop-blur-md border border-slate-200">
+        {toast && <div className="fixed top-4 right-4 z-50 rounded-xl bg-black/90 text-white px-4 py-2 text-base shadow-2xl font-semibold tracking-wide animate-fadein">{toast}</div>}
+
+        <header className="flex items-center justify-between gap-4 mb-2 border-b border-slate-200 px-4 py-3 bg-white/70 rounded-t-2xl">
+          <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight text-slate-800 drop-shadow-sm">Nois WebRTC</h1>
+          <div className="flex gap-2 items-center">
+            <button className={`px-4 py-2 rounded-lg font-semibold transition-all duration-150 border-2 ${tab==="call" ? "bg-blue-600 text-white border-blue-600 shadow-md" : "bg-white text-blue-700 border-blue-200 hover:bg-blue-50"}`} onClick={()=>setTab("call")}>通話</button>
+            <button className={`px-4 py-2 rounded-lg font-semibold transition-all duration-150 border-2 ${tab==="settings" ? "bg-blue-600 text-white border-blue-600 shadow-md" : "bg-white text-blue-700 border-blue-200 hover:bg-blue-50"}`} onClick={()=>setTab("settings")}>設定</button>
+            {onBack && (
+              <button onClick={onBack} className="ml-4 px-4 py-2 rounded-lg font-semibold border-2 border-gray-400 bg-white text-gray-700 hover:bg-gray-100 transition-all">ホームへ戻る</button>
+            )}
           </div>
         </header>
+        {roleLabel && (
+          <div className="mb-4 flex items-center gap-3 px-4">
+            <span className="px-3 py-1 rounded-full text-white font-bold text-base" style={{background: roleColor||'#2563eb'}}>{roleLabel}</span>
+            {roleDescription && <span className="text-gray-700 text-sm">{roleDescription}</span>}
+          </div>
+        )}
 
         {tab === "call" ? (
-          <div className="flex-1 flex flex-col lg:flex-row gap-3 overflow-hidden bg-gray-100 p-3">
-            {/* 左側：接続設定 */}
-            <div className="flex-shrink-0 lg:w-1/2 space-y-3">
-              <div className="bg-white border border-gray-300 p-3">
+          !isInCall ? (
+            // --- 接続設定画面（通話前） ---
+            <div className="flex-1 flex flex-col gap-3 overflow-hidden bg-gray-100 p-3">
+              <div className="bg-white border border-gray-300 p-3 max-w-xl mx-auto">
                 <h2 className="text-base font-semibold text-gray-800 mb-3 pb-2 border-b border-gray-300">接続設定</h2>
                 <div className="flex flex-wrap items-center gap-2 mb-3">
-                  <button onClick={micEnabled?stopMic:startMic} className={"px-3 py-2 text-white text-sm font-medium border " + (micEnabled ? "bg-red-600 border-red-600" : "bg-blue-600 border-blue-600")}>
+                  <button onClick={micEnabled?stopMic:startMic} className={"px-3 py-2 text-white text-sm font-medium border " + (micEnabled ? "bg-red-600 border-red-600" : "bg-blue-600 border-blue-600")}> 
                     {micEnabled ? "Stop Mic" : "Start Mic"}
                   </button>
                   <button onClick={toggleMute} disabled={!micEnabled} className={"px-3 py-2 text-white text-sm font-medium border " + (!micEnabled ? "bg-gray-400 border-gray-400 cursor-not-allowed" : (micMuted ? "bg-amber-600 border-amber-600" : "bg-amber-500 border-amber-500"))}>
                     {micMuted ? "Unmute" : "Mute"}
                   </button>
-                  {isInCall && (
-                    <button onClick={endCall} className="px-3 py-2 text-white text-sm font-medium border bg-red-700 border-red-700">
-                      通話終了
-                    </button>
-                  )}
                   <button onClick={createNewConnection} className="px-3 py-2 text-white text-sm font-medium border bg-gray-600 border-gray-600">
                     新規接続
                   </button>
@@ -387,13 +420,7 @@ export default function App() {
                       🎤 ローカル音声: {localStreamRef.current.getAudioTracks().length}トラック
                     </div>
                   )}
-                  {isInCall && (
-                    <div className="text-sm text-green-600 bg-green-50 px-2 py-1 border border-green-300 font-medium">
-                      🎤 通話中
-                    </div>
-                  )}
                 </div>
-
                 <div className="space-y-3">
                   <div>
                     <h3 className="font-medium text-gray-700 mb-2 text-sm">Local SDP（相手へ渡す）</h3>
@@ -416,45 +443,48 @@ export default function App() {
                       <button onClick={acceptOfferAndCreateAnswer} disabled={answering || role!=="answerer"} className={"px-3 py-2 text-white text-sm font-medium border " + (role!=="answerer" ? "bg-gray-400 border-gray-400 cursor-not-allowed" : (answering ? "bg-indigo-400 border-indigo-400 cursor-not-allowed" : "bg-indigo-600 border-indigo-600"))}>
                         {answering ? "Answering..." : "Paste Offer → Create Answer（Answerer）"}
                       </button>
-                      <button onClick={setRemoteDescriptionManual} disabled={settingRemote} className={"px-3 py-2 text-white text-sm font-medium border " + (settingRemote ? "bg-gray-400 border-gray-400 cursor-not-allowed" : "bg-gray-600 border-gray-600")}>
+                      <button onClick={setRemoteDescriptionManual} disabled={settingRemote} className={"px-3 py-2 text-white text-sm font-medium border " + (settingRemote ? "bg-gray-400 border-gray-400 cursor-not-allowed" : "bg-gray-600 border-gray-600")}> 
                         {settingRemote ? "Setting..." : "Set Remote Description"}
                       </button>
-
-                      <div className="flex items-center gap-2 ml-auto">
-                        <label className="text-sm font-medium text-gray-700">Role:</label>
-                        <select className="border border-gray-300 px-2 py-1 text-sm bg-white" value={role} onChange={(e)=>setRole(e.target.value as Role)}>
-                          <option value="caller">Caller</option>
-                          <option value="answerer">Answerer</option>
-                        </select>
-                      </div>
+                      {/* forcedRoleがない場合のみロール切替UIを表示 */}
+                      {!forcedRole && (
+                        <div className="flex items-center gap-2 ml-auto">
+                          <label className="text-sm font-medium text-gray-700">Role:</label>
+                          <select className="border border-gray-300 px-2 py-1 text-sm bg-white" value={role} onChange={(e)=>setRole(e.target.value as Role)}>
+                            <option value="caller">Caller</option>
+                            <option value="answerer">Answerer</option>
+                          </select>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
               </div>
             </div>
-
-            {/* 右側：音声と字幕 */}
-            <div className="flex-1 flex flex-col space-y-3">
-              <div className="bg-white border border-gray-300 p-3">
-                <h2 className="text-base font-semibold text-gray-800 mb-3 pb-2 border-b border-gray-300">音声</h2>
-                <audio ref={remoteAudioRef} autoPlay playsInline controls className="w-full" />
-                <p className="text-sm text-gray-600 mt-2">双方で「Start Mic」を押すとリアルタイム音声通話が始まります。</p>
-              </div>
-
-              <div className="bg-white border border-gray-300 p-3 flex-1 overflow-hidden">
-                <h2 className="text-base font-semibold text-gray-800 mb-3 pb-2 border-b border-gray-300">字幕（DataChannel）</h2>
-                <div className="flex items-center gap-2 flex-wrap mb-3">
-                  <input className="flex-1 min-w-0 border border-gray-300 px-2 py-2 bg-white" value={sendText} onChange={(e)=>setSendText(e.target.value)} onKeyDown={(e)=>{ if(e.key==='Enter'){ e.preventDefault(); sendCaption(); }}} placeholder="字幕として送りたいテキスト"/>
-                  <button onClick={sendCaption} disabled={sendingCaption} className={"px-3 py-2 text-white text-sm font-medium border " + (sendingCaption ? "bg-gray-400 border-gray-400 cursor-not-allowed" : "bg-emerald-600 border-emerald-600")}>
-                    {sendingCaption? "Sending..." : (dcState==="open" ? "Send" : "Queue") }
-                  </button>
+          ) : (
+            // --- 通話画面（音声＋字幕） ---
+            <div className="flex-1 flex flex-col lg:flex-row gap-3 overflow-hidden bg-gray-100 p-3">
+              <div className="flex-1 flex flex-col space-y-3">
+                <div className="bg-white border border-gray-300 p-3">
+                  <h2 className="text-base font-semibold text-gray-800 mb-3 pb-2 border-b border-gray-300">音声</h2>
+                  <audio ref={remoteAudioRef} autoPlay playsInline controls className="w-full" />
+                  <p className="text-sm text-gray-600 mt-2">双方で「Start Mic」を押すとリアルタイム音声通話が始まります。</p>
                 </div>
-                <div className="h-64 overflow-auto border border-gray-300 p-3 bg-gray-50">
-                  <ul className="space-y-1">{captions.map((c,i)=>(<li key={i} className={`text-sm text-gray-700 border-b border-gray-200 pb-1 ${c.startsWith("(you) ") ? "text-left" : "text-right"}`}>{c}</li>))}</ul>
+                <div className="bg-white border border-gray-300 p-3 flex-1 overflow-hidden">
+                  <h2 className="text-base font-semibold text-gray-800 mb-3 pb-2 border-b border-gray-300">字幕（DataChannel）</h2>
+                  <div className="flex items-center gap-2 flex-wrap mb-3">
+                    <input className="flex-1 min-w-0 border border-gray-300 px-2 py-2 bg-white" value={sendText} onChange={(e)=>setSendText(e.target.value)} onKeyDown={(e)=>{ if(e.key==='Enter'){ e.preventDefault(); sendCaption(); }}} placeholder="字幕として送りたいテキスト"/>
+                    <button onClick={sendCaption} disabled={sendingCaption} className={"px-3 py-2 text-white text-sm font-medium border " + (sendingCaption ? "bg-gray-400 border-gray-400 cursor-not-allowed" : "bg-emerald-600 border-emerald-600")}> 
+                      {sendingCaption? "Sending..." : (dcState==="open" ? "Send" : "Queue") }
+                    </button>
+                  </div>
+                  <div className="h-64 overflow-auto border border-gray-300 p-3 bg-gray-50">
+                    <ul className="space-y-1">{captions.map((c,i)=>(<li key={i} className={`text-sm text-gray-700 border-b border-gray-200 pb-1 ${c.startsWith("(you) ") ? "text-left" : "text-right"}`}>{c}</li>))}</ul>
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
+          )
         ) : (
           <div className="flex-1 overflow-auto bg-gray-100 p-3">
             <div className="bg-white border border-gray-300 p-4">
