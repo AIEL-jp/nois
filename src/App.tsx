@@ -45,6 +45,16 @@ export default function App({ forcedRole, onBack }: AppProps & { onBack?: () => 
   const [showMediaUI, setShowMediaUI] = useState<boolean>(forcedRole ? false : true);
   // UI: 接続設定を表示するか。Set Remote Description後は非表示にする（ただし機能は隠すだけ）
   const [showConnectionUI, setShowConnectionUI] = useState<boolean>(true);
+  // UI: Call側の段階的表示制御
+  const [showLocalSDP, setShowLocalSDP] = useState<boolean>(false);
+  const [showRemoteSDP, setShowRemoteSDP] = useState<boolean>(false);
+  // UI: Answerer側の段階的表示制御
+  const [showAnswererRemoteSDP, setShowAnswererRemoteSDP] = useState<boolean>(false);
+  const [showAnswererLocalSDP, setShowAnswererLocalSDP] = useState<boolean>(false);
+  // Answerer側のLocal SDP値保存用
+  const [answererLocalSDPValue, setAnswererLocalSDPValue] = useState<string>("");
+  // Answerer側のRemote SDP入力値監視用
+  const [answererRemoteSDPInput, setAnswererRemoteSDPInput] = useState<string>("");
 
   // Translation / TTS
   const [fromLang, setFromLang] = useState<Lang>("auto");
@@ -161,6 +171,16 @@ export default function App({ forcedRole, onBack }: AppProps & { onBack?: () => 
       
       setMicEnabled(true); 
       setMicMuted(false);
+      
+      // Call側の場合、Local SDPを表示
+      if (role === "caller") {
+        setShowLocalSDP(true);
+      }
+      // Answerer側の場合、Remote SDPを表示
+      if (role === "answerer") {
+        setShowAnswererRemoteSDP(true);
+      }
+      
       showToast("マイクが開始されました");
       
       // 音声トラックを追加した後、接続が確立されている場合は再ネゴシエーションが必要
@@ -292,6 +312,10 @@ export default function App({ forcedRole, onBack }: AppProps & { onBack?: () => 
       await pc.setLocalDescription(offer);
       await waitForICEGathering(pc);
       localSDPRef.current!.value = JSON.stringify(pc.localDescription);
+      
+      // Create Offer後、Remote SDPを表示
+      setShowRemoteSDP(true);
+      
       showToast("Offer created - 音声トラックが含まれています");
     } finally { setCreatingOffer(false); }
   }
@@ -312,7 +336,18 @@ export default function App({ forcedRole, onBack }: AppProps & { onBack?: () => 
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
       await waitForICEGathering(pc);
-      localSDPRef.current!.value = JSON.stringify(pc.localDescription);
+      
+      // Answerer側の場合、Local SDPを表示してから値を設定
+      if (role === "answerer") {
+        setAnswererLocalSDPValue(JSON.stringify(pc.localDescription));
+        setShowAnswererLocalSDP(true);
+      } else {
+        // Caller側の場合は従来通り
+        if (localSDPRef.current) {
+          localSDPRef.current.value = JSON.stringify(pc.localDescription);
+        }
+      }
+      
       showToast("Answer created - 音声トラックが含まれています");
     } finally { setAnswering(false); }
   }
@@ -414,27 +449,25 @@ export default function App({ forcedRole, onBack }: AppProps & { onBack?: () => 
             <div className="home-font text-3xl font-extrabold pr-1 bg-gradient-to-r from-sky-400 to-slate-500 bg-clip-text text-transparent drop-shadow-sm select-none" style={{letterSpacing:'-1px'}}>{headerTitle}</div>
           </div>
           <div className="flex gap-2 items-center">
-            <button className={`px-4 py-2 rounded-lg font-semibold transition-all duration-150 border-2 ${tab==="call" ? "bg-blue-600 text-white border-blue-600 shadow-md" : "bg-white text-blue-700 border-blue-200 hover:bg-blue-50"}`} onClick={()=>setTab("call")}>通話</button>
+            {page === 'call' && (
+              <button onClick={() => setTab("settings")} className="flex items-center justify-center w-6 h-6 hover:opacity-80 transition-opacity cursor-pointer">
+                <img src="/icon-settings.png" alt="設定" className="w-full h-full object-contain" />
+              </button>
+            )}
           </div>
         </header>
 
         {tab === "call" ? (
-          <div className={`flex-1 flex flex-col lg:flex-row overflow-hidden bg-white ${ (showConnectionUI && showMediaUI) ? 'gap-3 p-3' : 'gap-0 p-0' }`}>
+          <div className={`flex-1 flex flex-col lg:flex-row overflow-hidden bg-white pb-24 ${ (showConnectionUI && showMediaUI) ? 'gap-3 p-3' : 'gap-0 p-0' }`}>
             {/* 左側：接続設定 */}
             <div className={`flex-shrink-0 ${showConnectionUI ? (showMediaUI ? 'w-full lg:w-1/2' : 'w-full lg:w-full') : 'w-0 lg:w-0'} space-y-3 transition-all ${showConnectionUI ? '' : 'opacity-0 pointer-events-none max-h-0 overflow-hidden'}`}>
               <div>
-                <div className="flex items-center justify-between mb-3 pb-2 border-b border-gray-300">
+                <div className="mb-3 pb-2 border-b border-gray-300">
                   <h2 className="text-base font-semibold text-gray-800">接続設定</h2>
-                  <button onClick={() => setTab("settings")} className="flex items-center justify-center w-6 h-6 hover:opacity-80 transition-opacity cursor-pointer">
-                    <img src="/icon-settings.png" alt="設定" className="w-full h-full object-contain" />
-                  </button>
                 </div>
                 <div className="flex flex-wrap items-center gap-2 mb-3">
-                  <button onClick={micEnabled?stopMic:startMic} className={"px-3 py-2 text-white text-sm font-medium border " + (micEnabled ? "bg-red-600 border-red-600" : "bg-blue-600 border-blue-600")}>
-                    {micEnabled ? "Stop Mic" : "Start Mic"}
-                  </button>
-                  <button onClick={toggleMute} disabled={!micEnabled} className={"px-3 py-2 text-white text-sm font-medium border " + (!micEnabled ? "bg-gray-400 border-gray-400 cursor-not-allowed" : (micMuted ? "bg-amber-600 border-amber-600" : "bg-amber-500 border-amber-500"))}>
-                    {micMuted ? "Unmute" : "Mute"}
+                  <button onClick={micEnabled?stopMic:startMic} className={"px-3 py-2 text-white text-sm font-medium border rounded " + (micEnabled ? "bg-red-600 border-red-600" : "bg-blue-600 border-blue-600")}>
+                    {micEnabled ? "Call Stop" : "Call Start "}
                   </button>
                 </div>
 
@@ -442,7 +475,7 @@ export default function App({ forcedRole, onBack }: AppProps & { onBack?: () => 
                   <>
                     {isInCall && (
                       <div className="flex flex-wrap items-center gap-2 mb-3">
-                        <button onClick={endCall} className="px-3 py-2 text-white text-sm font-medium border bg-red-700 border-red-700">
+                        <button onClick={endCall} className="px-3 py-2 text-white text-sm font-medium border rounded bg-red-700 border-red-700">
                           通話終了
                         </button>
                         <div className="text-sm text-green-600 bg-green-50 px-2 py-1 border border-green-300 font-medium">
@@ -452,45 +485,97 @@ export default function App({ forcedRole, onBack }: AppProps & { onBack?: () => 
                     )}
 
                     <div className="space-y-3">
-                      <div>
-                        <h3 className="font-medium text-gray-700 mb-2 text-sm">Local SDP（相手へ渡す）</h3>
-                        <div className="relative">
-                          <textarea ref={localSDPRef} className="w-full h-40 border border-gray-300 p-2 text-sm font-mono bg-gray-50" readOnly />
-                          <button
-                            onClick={async ()=>{ try{ await navigator.clipboard.writeText(localSDPRef.current?.value||""); setCopiedLocal(true); showToast("Local SDP copied"); setTimeout(()=>setCopiedLocal(false),1200);}catch{} }}
-                            className={"absolute top-2 right-2 px-2 py-1 text-white text-sm border " + (copiedLocal ? "bg-green-600 border-green-600" : "bg-gray-600 border-gray-600")}
-                          >{copiedLocal?"Copied!":"Copy"}</button>
-                        </div>
-                        <p className="text-xs text-gray-500 mt-1">Caller は Offer、Answerer は Answer をここに出力します。</p>
-                      </div>
-                      <div>
-                        <h3 className="font-medium text-gray-700 mb-2 text-sm">Remote SDP（相手から貼付け）</h3>
-                        <textarea ref={remoteSDPRef} className="w-full h-40 border border-gray-300 p-2 text-sm font-mono bg-gray-50" placeholder="相手から受け取った JSON を貼り付け" />
-                        <div className="flex flex-wrap gap-2 mt-2">
-                          {role === "caller" && (
-                            <button onClick={createOffer} disabled={creatingOffer} className={"px-3 py-2 text-white text-sm font-medium border " + (creatingOffer ? "bg-indigo-400 border-indigo-400 cursor-not-allowed" : "bg-indigo-600 border-indigo-600")}>
-                              {creatingOffer ? "Creating..." : "Create Offer（Caller）"}
+                      {/* Local SDP - Call側のみ段階的に表示 */}
+                      {role === "caller" && showLocalSDP && (
+                        <div>
+                          <h3 className="font-medium text-gray-700 mb-2 text-sm">Pairing Code</h3>
+                          <div className="relative">
+                            <textarea 
+                              ref={localSDPRef} 
+                              className="w-full h-16 border border-gray-300 p-2 text-sm font-mono bg-gray-50" 
+                              readOnly 
+                              placeholder="Tap 'Create' to generate an authentication code and send it to the other person."
+                            />
+                            <button
+                              onClick={async ()=>{ try{ await navigator.clipboard.writeText(localSDPRef.current?.value||""); setCopiedLocal(true); showToast("Local SDP copied"); setTimeout(()=>setCopiedLocal(false),1200);}catch{} }}
+                              className={"absolute top-2 right-2 px-2 py-1 text-white text-sm border " + (copiedLocal ? "bg-green-600 border-green-600" : "bg-gray-600 border-gray-600")}
+                            >{copiedLocal?"Copied!":"Copy"}</button>
+                          </div>
+                          <div className="flex justify-center mt-2">
+                            <button onClick={createOffer} disabled={creatingOffer} className={"px-3 py-2 text-white text-lg font-medium border rounded " + (creatingOffer ? "bg-indigo-400 border-indigo-400 cursor-not-allowed" : "bg-indigo-600 border-indigo-600")}>
+                              {creatingOffer ? "Creating..." : "Create"}
                             </button>
-                          )}
-                          <button onClick={acceptOfferAndCreateAnswer} disabled={answering || role!=="answerer"} className={"px-3 py-2 text-white text-sm font-medium border " + (role!=="answerer" ? "bg-gray-400 border-gray-400 cursor-not-allowed" : (answering ? "bg-indigo-400 border-indigo-400 cursor-not-allowed" : "bg-indigo-600 border-indigo-600"))}>
-                            {answering ? "Answering..." : "Paste Offer → Create Answer（Answerer）"}
-                          </button>
-                          <button onClick={setRemoteDescriptionManual} disabled={settingRemote} className={"px-3 py-2 text-white text-sm font-medium border " + (settingRemote ? "bg-gray-400 border-gray-400 cursor-not-allowed" : "bg-gray-600 border-gray-600")}>
-                            {settingRemote ? "Setting..." : "Set Remote Description"}
-                          </button>
-
-                          {/* forcedRoleがない場合のみロール切替UIを表示 */}
-                          {!forcedRole && (
-                            <div className="flex items-center gap-2 ml-auto">
-                              <label className="text-sm font-medium text-gray-700">Role:</label>
-                              <select className="border border-gray-300 px-2 py-1 text-sm bg-white" value={role} onChange={(e)=>setRole(e.target.value as Role)}>
-                                <option value="caller">Caller</option>
-                                <option value="answerer">Answerer</option>
-                              </select>
+                          </div>
+                        </div>
+                      )}
+                      
+                      {/* Remote SDP - Call側のみ段階的に表示 */}
+                      {role === "caller" && showRemoteSDP && (
+                        <div>
+                          <h3 className="font-medium text-gray-700 mb-2 text-sm">Paste Pairing Code</h3>
+                          <textarea ref={remoteSDPRef} className="w-full h-16 border border-gray-300 p-2 text-sm font-mono bg-gray-50" placeholder="Paste the pairing code here." />
+                          <div className="flex justify-center mt-2">
+                            <button onClick={setRemoteDescriptionManual} disabled={settingRemote} className={"px-3 py-2 text-white text-lg font-medium border rounded " + (settingRemote ? "bg-indigo-400 border-indigo-400 cursor-not-allowed" : "bg-indigo-600 border-indigo-600")}>
+                              {settingRemote ? "Setting..." : "Start a call"}
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                      
+                                              {/* Answerer側のRemote SDP表示（段階的に表示） */}
+                        {role === "answerer" && showAnswererRemoteSDP && (
+                          <div>
+                            <h3 className="font-medium text-gray-700 mb-2 text-sm">Paste Pairing Code</h3>
+                            <textarea 
+                              ref={remoteSDPRef} 
+                              value={answererRemoteSDPInput}
+                              onChange={(e) => setAnswererRemoteSDPInput(e.target.value)}
+                              className="w-full h-16 border border-gray-300 p-2 text-sm font-mono bg-gray-50" 
+                              placeholder="※Paste the pairing code here." 
+                            />
+                            {answererRemoteSDPInput.trim() && (
+                              <div className="flex justify-center mt-2">
+                                <button onClick={acceptOfferAndCreateAnswer} disabled={answering} className={"px-3 py-2 text-white text-lg font-medium border rounded " + (answering ? "bg-indigo-400 border-indigo-400 cursor-not-allowed" : "bg-indigo-600 border-indigo-600")}>
+                                  {answering ? "Answering..." : "Create"}
+                                </button>
+                              </div>
+                            )}
+                          
+                          {/* Answerer側のLocal SDP表示（Remote SDPの下に配置） */}
+                          {showAnswererLocalSDP && (
+                            <div className="mt-4">
+                              <h3 className="font-medium text-gray-700 mb-2 text-sm">Pairing Code</h3>
+                              <div className="relative">
+                                <textarea 
+                                  value={answererLocalSDPValue}
+                                  className="w-full h-16 border border-gray-300 p-2 text-sm font-mono bg-gray-50"  
+                                  readOnly 
+                                />
+                                <button
+                                  onClick={async ()=>{ try{ await navigator.clipboard.writeText(answererLocalSDPValue); setCopiedLocal(true); showToast("Local SDP copied"); setTimeout(()=>setCopiedLocal(false),1200);}catch{} }}
+                                  className={"absolute top-2 right-2 px-2 py-1 text-white text-sm border " + (copiedLocal ? "bg-green-600 border-green-600" : "bg-gray-600 border-gray-600")}
+                                >{copiedLocal?"Copied!":"Copy"}</button>
+                              </div>
+                              <div className="flex justify-center mt-2">
+                                <button onClick={setRemoteDescriptionManual} disabled={settingRemote} className={"px-3 py-2 text-white text-sm font-medium border rounded " + (settingRemote ? "bg-indigo-400 border-indigo-400 cursor-not-allowed" : "bg-indigo-600 border-indigo-600")}>
+                                  {settingRemote ? "Setting..." : "Set Remote Description"}
+                                </button>
+                              </div>
                             </div>
                           )}
                         </div>
-                      </div>
+                      )}
+
+                      {/* forcedRoleがない場合のみロール切替UIを表示 */}
+                      {!forcedRole && (
+                        <div className="flex items-center gap-2 ml-auto">
+                          <label className="text-sm font-medium text-gray-700">Role:</label>
+                          <select className="border border-gray-300 px-2 py-1 text-sm bg-white" value={role} onChange={(e)=>setRole(e.target.value as Role)}>
+                            <option value="caller">Caller</option>
+                            <option value="answerer">Answerer</option>
+                          </select>
+                        </div>
+                      )}
                     </div>
                   </>
                 )}
@@ -501,6 +586,11 @@ export default function App({ forcedRole, onBack }: AppProps & { onBack?: () => 
             <div className={`${showMediaUI ? 'w-full lg:w-full' : 'w-0 lg:w-0'} flex-1 flex flex-col space-y-3 transition-all ${showMediaUI ? '' : 'opacity-0 pointer-events-none max-h-0 overflow-hidden'}`}>
               <div>
                 <h2 className="text-base font-semibold text-gray-800 mb-3 pb-2 border-b border-gray-300">音声</h2>
+                <div className="flex items-center gap-2 mb-3">
+                  <button onClick={toggleMute} disabled={!micEnabled} className={"px-3 py-2 text-white text-sm font-medium border rounded " + (!micEnabled ? "bg-gray-400 border-gray-400 cursor-not-allowed" : (micMuted ? "bg-amber-600 border-amber-600" : "bg-amber-500 border-amber-500"))}>
+                    {micMuted ? "Unmute" : "Mute"}
+                  </button>
+                </div>
                 <audio ref={remoteAudioRef} autoPlay playsInline controls className="w-full" />
                 <p className="text-sm text-gray-600 mt-2">双方で「Start Mic」を押すとリアルタイム音声通話が始まります。</p>
               </div>
@@ -509,7 +599,7 @@ export default function App({ forcedRole, onBack }: AppProps & { onBack?: () => 
                 <h2 className="text-base font-semibold text-gray-800 mb-3 pb-2 border-b border-gray-300">字幕（DataChannel）</h2>
                 <div className="flex items-center gap-2 flex-wrap mb-3">
                   <input className="flex-1 min-w-0 border border-gray-300 px-2 py-2 bg-white" value={sendText} onChange={(e)=>setSendText(e.target.value)} onKeyDown={(e)=>{ if(e.key==='Enter'){ e.preventDefault(); sendCaption(); }}} placeholder="字幕として送りたいテキスト"/>
-                  <button onClick={sendCaption} disabled={sendingCaption} className={"px-3 py-2 text-white text-sm font-medium border " + (sendingCaption ? "bg-gray-400 border-gray-400 cursor-not-allowed" : "bg-emerald-600 border-emerald-600")}>
+                  <button onClick={sendCaption} disabled={sendingCaption} className={"px-3 py-2 text-white text-sm font-medium border rounded " + (sendingCaption ? "bg-gray-400 border-gray-400 cursor-not-allowed" : "bg-emerald-600 border-emerald-600")}>
                     {sendingCaption? "Sending..." : (dcState==="open" ? "Send" : "Queue") }
                   </button>
                 </div>
@@ -558,7 +648,7 @@ export default function App({ forcedRole, onBack }: AppProps & { onBack?: () => 
                       </select>
                     </div>
                     <div className="flex gap-2">
-                      <button onClick={()=>{ const sample = ttsLang==="ja"?"テスト。こんにちは。":"Test: Hello there."; speak(sample); }} className="px-3 py-2 bg-gray-600 text-white text-sm font-medium border border-gray-600">TTS Test</button>
+                      <button onClick={()=>{ const sample = ttsLang==="ja"?"テスト。こんにちは。":"Test: Hello there."; speak(sample); }} className="px-3 py-2 bg-gray-600 text-white text-sm font-medium border rounded border-gray-600">TTS Test</button>
                     </div>
                   </div>
                 </div>
@@ -571,6 +661,17 @@ export default function App({ forcedRole, onBack }: AppProps & { onBack?: () => 
           </div>
         )}
       </div>
+      
+      {/* ナビゲーションバー（フッター） */}
+      <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 flex justify-around items-center h-16 z-20">
+        <button className="flex flex-col items-center"><img src="/home.png" alt="home" className="w-7 h-7 object-contain" /></button>
+        <button className="flex flex-col items-center"><img src="/discover-icon.png" alt="discover" className="w-7 h-7 object-contain" /></button>
+        <div className="flex flex-col items-center justify-center">
+          <img src="/logo.png" alt="logo" className="w-10 h-10 object-contain" style={{marginTop: '-2px'}} />
+        </div>
+        <button className="flex flex-col items-center"><img src="/icon_beru.png" alt="bell" className="w-7 h-7 object-contain" /></button>
+        <button className="flex flex-col items-center"><img src="/icon-settings.png" alt="settings" className="w-7 h-7 object-contain" /></button>
+      </nav>
     </div>
   );
 }

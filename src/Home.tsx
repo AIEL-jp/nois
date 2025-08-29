@@ -14,15 +14,27 @@ const icons = {
 
 export default function Home({ onCall, onReception }: { onCall: () => void, onReception?: () => void }) {
   return (
-    <div className="min-h-screen flex flex-col bg-white home-font">
+    <div className="min-h-screen flex flex-col bg-white home-font relative">
+      {/* 背景画像 */}
+      <div 
+        className="absolute inset-0 z-0"
+        style={{
+          backgroundImage: 'url(/nois-background.png)',
+          backgroundSize: 'contain',
+          backgroundPosition: 'right top',
+          backgroundRepeat: 'no-repeat',
+          opacity: 0.1,
+          top: '80px'
+        }}
+      />
       {/* ヘッダー */}
-      <header className="flex items-center justify-between px-4 pt-4 pb-2 overflow-visible">
+      <header className="flex items-center justify-between px-4 pt-4 pb-2 mb-6 border-b border-slate-200 overflow-visible relative z-10">
             <div className="text-3xl font-extrabold pr-1 bg-gradient-to-r from-sky-400 to-slate-500 bg-clip-text text-transparent drop-shadow-sm select-none" style={{letterSpacing:'-1px'}}>Nois</div>
         <div className="text-slate-500">{icons.user}</div>
       </header>
 
       {/* メイン */}
-      <main className="flex-1 flex flex-col items-center px-2 pb-24 pt-2">
+      <main className="flex-1 flex flex-col items-center px-2 pb-24 pt-2 relative z-10">
         <div className="w-full h-48 bg-black rounded-xl mb-4 flex items-center justify-center">
           {/* 映像や波形などをここに配置可能 */}
         </div>
@@ -45,7 +57,7 @@ export default function Home({ onCall, onReception }: { onCall: () => void, onRe
       </main>
 
       {/* ナビゲーションバー */}
-      <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 flex justify-around items-center h-16 z-50">
+      <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 flex justify-around items-center h-16 z-20">
         <button className="flex flex-col items-center"><img src="/home.png" alt="home" className="w-7 h-7 object-contain" /></button>
         <button className="flex flex-col items-center"><img src="/discover-icon.png" alt="discover" className="w-7 h-7 object-contain" /></button>
         <div className="flex flex-col items-center justify-center">
