@@ -44,6 +44,8 @@ export default function App({ forcedRole, onBack, roleLabel, roleDescription, ro
   const [connState, setConnState] = useState<RTCPeerConnectionState | "new">("new");
   const [iceState, setIceState] = useState<RTCIceConnectionState | "new">("new");
   const [isInCall, setIsInCall] = useState(false);
+  // UI: 通話画面を表示するフラグ（Create Answer の直後は true にしない）
+  const [uiCallStarted, setUiCallStarted] = useState(false);
 
   // Translation / TTS
   const [fromLang, setFromLang] = useState<Lang>("auto");
@@ -67,10 +69,12 @@ export default function App({ forcedRole, onBack, roleLabel, roleDescription, ro
       const newState = p.connectionState;
       setConnState(newState);
       if (newState === "connected") {
-        setIsInCall(true);
+  setIsInCall(true);
+  setUiCallStarted(true);
         showToast("音声通話が接続されました");
       } else if (newState === "disconnected" || newState === "failed" || newState === "closed") {
         setIsInCall(false);
+  setUiCallStarted(false);
         showToast("音声通話が切断されました");
       }
     };
@@ -199,6 +203,7 @@ export default function App({ forcedRole, onBack, roleLabel, roleDescription, ro
     setMicEnabled(false);
     setMicMuted(false);
     setIsInCall(false);
+  setUiCallStarted(false);
     setConnState("new");
     setIceState("new");
     setDcState("closed");
@@ -317,7 +322,8 @@ export default function App({ forcedRole, onBack, roleLabel, roleDescription, ro
       const remote = JSON.parse(remoteSDPRef.current.value);
       await pc.setRemoteDescription(remote);
       showToast("Remote description set");
-      setIsInCall(true);
+  // ユーザーが明示的に Remote Description をセットしたときに UI を通話画面へ切替
+  setUiCallStarted(true);
     } finally { setSettingRemote(false); }
   }
 
@@ -397,7 +403,7 @@ export default function App({ forcedRole, onBack, roleLabel, roleDescription, ro
         )}
 
         {tab === "call" ? (
-          !isInCall ? (
+          !uiCallStarted ? (
             // --- 接続設定画面（通話前） ---
             <div className="flex-1 flex flex-col gap-3 overflow-hidden bg-gray-100 p-3">
               <div className="bg-white border border-gray-300 p-3 max-w-xl mx-auto">
