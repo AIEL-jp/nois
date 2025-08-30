@@ -6,15 +6,24 @@ import Answer from './Answer'
 import './index.css'
 
 function Root() {
-	const [page, setPage] = React.useState<'home'|'caller'|'answer'>('home');
-	const handleBack = () => setPage('home');
-	if (page === 'caller') return <Caller onBack={handleBack} />;
-	if (page === 'answer') return <Answer onBack={handleBack} />;
-	return <Home onCall={() => setPage('caller')} onReception={() => setPage('answer')} />;
+  const [page, setPage] = React.useState<'home' | 'caller' | 'answer'>('home')
+
+  const handleBack = () => setPage('home')
+
+  if (page === 'caller') return <Caller onBack={handleBack} />
+  if (page === 'answer') return <Answer onBack={handleBack} />
+
+  return (
+    <Home
+      onCall={() => setPage('caller')}
+      onReception={() => setPage('answer')}
+      onFriendList={() => console.log('Friend List ボタンが押されました')} // ✅ 追加
+    />
+  )
 }
 
 createRoot(document.getElementById('root')!).render(
-	<React.StrictMode>
-		<Root />
-	</React.StrictMode>
+  <React.StrictMode>
+    <Root />
+  </React.StrictMode>
 )

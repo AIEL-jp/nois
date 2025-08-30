@@ -36,7 +36,7 @@ export default function Home({ onCall, onReception, onFriendList }: { onCall: ()
       {/* メイン */}
       <main className="flex-1 flex flex-col items-center px-2 pb-24 pt-2 relative z-10">
         <div className="w-full h-48 bg-black rounded-xl mb-4 flex items-center justify-center">
-          {/* 映像や波形などをここに配置可能 */}
+          <span className="text-white text-xl font-medium">Tutorial Movie</span>
         </div>
         <div className="w-full flex flex-col gap-4 items-center">
           <button onClick={onFriendList} className="w-full max-w-xs flex flex-row items-center justify-center border-2 border-slate-300 rounded-xl py-3 bg-white shadow-md active:scale-95 transition-all gap-2">
