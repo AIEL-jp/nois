@@ -35,15 +35,15 @@ export default function Home({ onCall, onReception, onFriendList }: { onCall: ()
 
       {/* メイン */}
       <main className="flex-1 flex flex-col items-center px-2 pb-24 pt-2 relative z-10">
-        <div className="w-9/12 h-48 bg-black rounded-xl mb-4 flex items-center justify-center">
+        <div className="w-full h-48 bg-black rounded-xl mb-4 flex items-center justify-center">
           <span className="text-white text-xl font-medium">Tutorial Movie</span>
         </div>
         <div className="w-full flex flex-col gap-4 items-center">
-          <button onClick={onFriendList} className="w-full max-w-xs flex flex-row items-center justify-center border-2 border-slate-300 rounded-xl py-3 bg-white shadow-md active:scale-95 transition-all gap-2">
+          <button onClick={onFriendList} className="w-full max-w-sm flex flex-row items-center justify-center border-2 border-slate-300 rounded-xl py-3 bg-white shadow-md active:scale-95 transition-all gap-2">
             <img src="/friend-icon.png" alt="friend" className="w-7 h-7 object-contain" />
             <span className="text-2xl font-extrabold bg-gradient-to-r from-sky-400 to-slate-500 bg-clip-text text-transparent tracking-tight">Friend List</span>
           </button>
-          <div className="w-full max-w-xs grid grid-cols-2 gap-4">
+          <div className="w-full max-w-sm grid grid-cols-2 gap-4">
             <button onClick={onCall} className="flex flex-row items-center justify-center border-2 border-slate-300 rounded-xl py-3 bg-white shadow-md active:scale-95 transition-all gap-2">
               <img src="/call-icon.png" alt="call" className="w-7 h-7 object-contain" />
               <span className="text-xl font-extrabold bg-gradient-to-r from-slate-600 to-slate-400 bg-clip-text text-transparent">Call</span>
