@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Lang, Translator, detect, translate } from "./translate";
 import Home from "./Home";
+import FriendList from "./FriendList";
 
 type Role = "caller" | "answerer";
 
@@ -60,6 +61,8 @@ export default function App({ forcedRole, onBack }: AppProps & { onBack?: () => 
   const [showCamera, setShowCamera] = useState<boolean>(false);
   // 通話時間管理
   const [callDuration, setCallDuration] = useState<number>(0);
+  // FriendList画面の表示状態
+  const [showFriendList, setShowFriendList] = useState<boolean>(false);
 
   // Translation / TTS
   const [fromLang, setFromLang] = useState<Lang>("auto");
@@ -475,13 +478,32 @@ export default function App({ forcedRole, onBack }: AppProps & { onBack?: () => 
         setRole('answerer');
         setPage('call');
       }}
+      onFriendList={() => setShowFriendList(true)}
     />;
   }
 
+  if (showFriendList) {
+    return <FriendList onBack={() => setShowFriendList(false)} />;
+  }
+
   return (
-    <div className={`min-h-screen ${page==='call' ? 'bg-white' : 'bg-gradient-to-br from-slate-100 to-slate-200'} p-2 md:p-4 overflow-hidden`}>
+    <div className={`min-h-screen ${page==='call' ? 'bg-white' : 'bg-gradient-to-br from-slate-100 to-slate-200'} p-2 md:p-4 overflow-hidden relative`}>
+      {/* 背景画像 - CallとReception画面にのみ表示 */}
+      {page === 'call' && (
+        <div 
+          className="absolute inset-0 z-0"
+          style={{
+            backgroundImage: 'url(/nois-background.png)',
+            backgroundSize: 'contain',
+            backgroundPosition: 'right top',
+            backgroundRepeat: 'no-repeat',
+            opacity: 0.1,
+            top: '220px'
+          }}
+        />
+      )}
       {/* Call/Recepton は背景を白にしてコンテンツと分離しない */}
-      <div className={`h-full flex flex-col ${page==='call' ? 'mx-0 w-full' : 'mx-auto max-w-5xl rounded-2xl shadow-2xl bg-white/80 backdrop-blur-md border border-slate-200'}`}>
+      <div className={`h-full flex flex-col relative z-10 ${page==='call' ? 'mx-0 w-full' : 'mx-auto max-w-5xl rounded-2xl shadow-2xl bg-white/80 backdrop-blur-md border border-slate-200'}`}>
         {toast && <div className="fixed top-4 right-4 z-50 rounded-xl bg-black/90 text-white px-4 py-2 text-base shadow-2xl font-semibold tracking-wide animate-fadein">{toast}</div>}
 
         <header className={`flex items-center justify-between pb-2 border-b border-slate-200 bg-white/70 ${page==='call' ? '' : 'rounded-t-2xl'}`}>
