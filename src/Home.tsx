@@ -35,7 +35,7 @@ export default function Home({ onCall, onReception, onFriendList }: { onCall: ()
 
       {/* メイン */}
       <main className="flex-1 flex flex-col items-center px-2 pb-24 pt-2 relative z-10">
-        <div className="w-full h-48 bg-black rounded-xl mb-4 flex items-center justify-center">
+        <div className="w-9/12 h-48 bg-black rounded-xl mb-4 flex items-center justify-center">
           <span className="text-white text-xl font-medium">Tutorial Movie</span>
         </div>
         <div className="w-full flex flex-col gap-4 items-center">
