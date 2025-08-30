@@ -24,7 +24,7 @@ export default function Home({ onCall, onReception, onFriendList }: { onCall: ()
           backgroundPosition: 'right top',
           backgroundRepeat: 'no-repeat',
           opacity: 0.1,
-          top: '80px'
+          top: '220px'
         }}
       />
       {/* ヘッダー */}

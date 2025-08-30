@@ -260,6 +260,13 @@ export default function App({ forcedRole, onBack }: AppProps & { onBack?: () => 
     setDcState("closed");
     setDataChannel(null);
     showToast("通話が終了されました");
+    
+    // ホーム画面に戻る
+    if (onBack) {
+      onBack();
+    } else {
+      setPage('home');
+    }
   }
 
   function createNewConnection() {
@@ -678,7 +685,7 @@ export default function App({ forcedRole, onBack }: AppProps & { onBack?: () => 
                   {/* Microphone */}
                   <div className="flex flex-col items-center">
                     <button
-                      onClick={() => setMicMuted(!micMuted)}
+                      onClick={() => toggleMute()}
                       className="w-7 h-7 rounded-full flex items-center justify-center transition-colors"
                       style={{
                         backgroundColor: micMuted ? '#dc2626' : '#1e1b4b'
@@ -713,9 +720,12 @@ export default function App({ forcedRole, onBack }: AppProps & { onBack?: () => 
                   
                   {/* End Call */}
                   <div className="flex flex-col items-center">
-                    <div className="w-12 h-12 bg-red-600 rounded-full flex items-center justify-center">
+                    <button
+                      onClick={endCall}
+                      className="w-12 h-12 bg-red-600 rounded-full flex items-center justify-center hover:bg-red-700 transition-colors cursor-pointer"
+                    >
                       <img src="/phone-icon.png" alt="end call" className="w-10 h-10 object-contain" />
-                    </div>
+                    </button>
                   </div>
                   
                   {/* Talk */}
